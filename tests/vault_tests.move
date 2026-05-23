@@ -205,7 +205,36 @@ fun new_vault_has_correct_initial_state() {
     assert!(option::is_none(&vault::predict_manager_id(&vault)), 1);
     assert!(vault::cash(&vault) == 0, 2);
     assert!(vault::plp_balance(&vault) == 0, 3);
+    assert!(vault::deposit_window_open(&vault) == true, 4);
 
     test_scenario::return_shared(vault);
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = 7)]
+fun deposit_aborts_when_window_closed() {
+    let mut scenario = test_scenario::begin(ADMIN);
+    setup(&mut scenario);
+
+    // Operator closes the window.
+    scenario.next_tx(ADMIN);
+    {
+        let mut vault = scenario.take_shared<Vault<MOCK_USDC>>();
+        vault::close_deposit_window(&mut vault, scenario.ctx());
+        test_scenario::return_shared(vault);
+    };
+
+    // Alice tries to deposit while window is closed -> aborts with E_DEPOSIT_WINDOW_CLOSED (7).
+    scenario.next_tx(ALICE);
+    let mut vault = scenario.take_shared<Vault<MOCK_USDC>>();
+    let mut treasury = scenario.take_shared<ShareTreasury>();
+    let payment = mint_mock(1000, scenario.ctx());
+
+    let shares = vault::deposit(&mut vault, &mut treasury, payment, scenario.ctx());
+
+    unit_test::destroy(shares);
+    test_scenario::return_shared(vault);
+    test_scenario::return_shared(treasury);
     scenario.end();
 }

@@ -3,10 +3,13 @@
 /// the linked manager ID) for binary positions, and accumulates PLP
 /// from the supply leg of the strategy.
 ///
-/// User flows (deposit, withdraw) are unrestricted. Strategy flows
-/// (deploy_to_predict, redeem_from_predict, buy_hedge, redeem_hedge,
-/// roll) require ctx.sender() == operator. See CLAUDE.md
-/// "Architecture decisions" for the V1 operator-key rationale.
+/// User flows (deposit, withdraw) are unrestricted in identity but
+/// gated by deposit_window_open. The window is open only when the
+/// vault is 100% cash, so cash-based NAV is exact at that moment.
+/// Strategy flows (deploy_to_predict, redeem_from_predict, buy_hedge,
+/// redeem_hedge) require ctx.sender() == operator and typically run
+/// while the window is closed. See CLAUDE.md "Architecture decisions"
+/// for the V1 operator-key and epoch-window rationale.
 module strata::vault;
 
 use std::option::{Self, Option};
@@ -29,6 +32,11 @@ public struct Vault<phantom T> has key {
     share_treasury_id: ID,
     operator: address,
     predict_manager_id: Option<ID>,
+    /// True when user deposits and withdrawals are accepted. False
+    /// while the vault has assets deployed that can't be priced
+    /// externally. Toggled by the operator before and after each
+    /// strategy cycle. Initialized true (vault starts at 100% cash).
+    deposit_window_open: bool,
 }
 
 // --- Events ---
@@ -83,6 +91,16 @@ public struct HedgeRedeemed has copy, drop {
     cash_returned: u64,
 }
 
+public struct DepositWindowOpened has copy, drop {
+    vault_id: ID,
+    operator: address,
+}
+
+public struct DepositWindowClosed has copy, drop {
+    vault_id: ID,
+    operator: address,
+}
+
 // --- Errors ---
 
 const E_ZERO_AMOUNT: u64 = 0;
@@ -92,6 +110,7 @@ const E_NOT_OPERATOR: u64 = 3;
 const E_MANAGER_ALREADY_SET: u64 = 4;
 const E_MANAGER_NOT_SET: u64 = 5;
 const E_WRONG_MANAGER: u64 = 6;
+const E_DEPOSIT_WINDOW_CLOSED: u64 = 7;
 
 // --- Constructor ---
 
@@ -107,6 +126,7 @@ public fun create_vault<T>(
         share_treasury_id: object::id(share_treasury),
         operator,
         predict_manager_id: option::none(),
+        deposit_window_open: true,
     };
     transfer::share_object(vault);
 }
@@ -125,7 +145,27 @@ public fun setup_predict_manager<T>(vault: &mut Vault<T>, ctx: &mut TxContext) {
     });
 }
 
-// --- User flows (unrestricted) ---
+// --- Deposit window control (operator) ---
+
+public fun open_deposit_window<T>(vault: &mut Vault<T>, ctx: &TxContext) {
+    assert!(ctx.sender() == vault.operator, E_NOT_OPERATOR);
+    vault.deposit_window_open = true;
+    event::emit(DepositWindowOpened {
+        vault_id: object::id(vault),
+        operator: ctx.sender(),
+    });
+}
+
+public fun close_deposit_window<T>(vault: &mut Vault<T>, ctx: &TxContext) {
+    assert!(ctx.sender() == vault.operator, E_NOT_OPERATOR);
+    vault.deposit_window_open = false;
+    event::emit(DepositWindowClosed {
+        vault_id: object::id(vault),
+        operator: ctx.sender(),
+    });
+}
+
+// --- User flows (window-gated) ---
 
 public fun deposit<T>(
     vault: &mut Vault<T>,
@@ -133,6 +173,7 @@ public fun deposit<T>(
     payment: Coin<T>,
     ctx: &mut TxContext,
 ): Coin<VAULT_SHARE> {
+    assert!(vault.deposit_window_open, E_DEPOSIT_WINDOW_CLOSED);
     assert!(object::id(share_treasury) == vault.share_treasury_id, E_WRONG_TREASURY);
 
     let amount_in = coin::value(&payment);
@@ -167,6 +208,7 @@ public fun withdraw<T>(
     shares: Coin<VAULT_SHARE>,
     ctx: &mut TxContext,
 ): Coin<T> {
+    assert!(vault.deposit_window_open, E_DEPOSIT_WINDOW_CLOSED);
     assert!(object::id(share_treasury) == vault.share_treasury_id, E_WRONG_TREASURY);
 
     let shares_amount = coin::value(&shares);
@@ -249,8 +291,6 @@ public fun redeem_from_predict<T>(
     });
 }
 
-/// Buy a directional binary position as a hedge.
-/// See module-level docs for the cash routing flow.
 public fun buy_hedge<T>(
     vault: &mut Vault<T>,
     predict: &mut Predict,
@@ -286,15 +326,6 @@ public fun buy_hedge<T>(
     });
 }
 
-/// Redeem a binary position. Payout is deposited into the manager
-/// balance internally by predict::redeem; we then sweep the full
-/// manager balance back to vault.cash.
-///
-/// Assumes the serial PLP+Hedge strategy: one hedge open at a time,
-/// so sweeping the full manager balance is safe. If we run parallel
-/// hedges in V2, this needs to track and pull just the delta.
-///
-/// Operator-only. Manager must match the linked one.
 public fun redeem_hedge<T>(
     vault: &mut Vault<T>,
     predict: &mut Predict,
@@ -311,10 +342,8 @@ public fun redeem_hedge<T>(
     assert!(object::id(manager) == expected_manager_id, E_WRONG_MANAGER);
     assert!(quantity > 0, E_ZERO_AMOUNT);
 
-    // Redeem the position. Payout lands in manager balance.
     predict::redeem<T>(predict, manager, oracle, key, quantity, clock, ctx);
 
-    // Sweep everything in the manager balance back to vault.cash.
     let manager_balance = predict_manager::balance<T>(manager);
     let cash_returned = if (manager_balance > 0) {
         let cash_coin = predict_manager::withdraw<T>(manager, manager_balance, ctx);
@@ -353,4 +382,8 @@ public fun operator<T>(vault: &Vault<T>): address {
 
 public fun predict_manager_id<T>(vault: &Vault<T>): Option<ID> {
     vault.predict_manager_id
+}
+
+public fun deposit_window_open<T>(vault: &Vault<T>): bool {
+    vault.deposit_window_open
 }
