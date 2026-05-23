@@ -101,6 +101,20 @@ public struct DepositWindowClosed has copy, drop {
     operator: address,
 }
 
+public struct HedgeSettledPermissionless has copy, drop {
+    vault_id: ID,
+    manager_id: ID,
+    caller: address,
+    quantity: u64,
+}
+
+public struct ManagerSwept has copy, drop {
+    vault_id: ID,
+    manager_id: ID,
+    operator: address,
+    cash_returned: u64,
+}
+
 // --- Errors ---
 
 const E_ZERO_AMOUNT: u64 = 0;
@@ -358,6 +372,69 @@ public fun redeem_hedge<T>(
         manager_id: object::id(manager),
         operator: ctx.sender(),
         quantity,
+        cash_returned,
+    });
+}
+
+/// Permissionlessly redeem a SETTLED binary position. Anyone may call
+/// this once the underlying oracle has settled. The payout is deposited
+/// into the linked PredictManager's balance via Predict's internal
+/// deposit_permissionless. The operator must subsequently call
+/// sweep_manager_to_vault to bring the cash back into vault.cash.
+///
+/// This is the entry point a keeper bot uses to lock in expiry payouts
+/// without requiring the operator's key.
+public fun redeem_settled_hedge_permissionless<T>(
+    vault: &Vault<T>,
+    predict: &mut Predict,
+    manager: &mut PredictManager,
+    oracle: &OracleSVI,
+    key: MarketKey,
+    quantity: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(option::is_some(&vault.predict_manager_id), E_MANAGER_NOT_SET);
+    let expected_manager_id = *option::borrow(&vault.predict_manager_id);
+    assert!(object::id(manager) == expected_manager_id, E_WRONG_MANAGER);
+    assert!(quantity > 0, E_ZERO_AMOUNT);
+
+    predict::redeem_permissionless<T>(predict, manager, oracle, key, quantity, clock, ctx);
+
+    event::emit(HedgeSettledPermissionless {
+        vault_id: object::id(vault),
+        manager_id: object::id(manager),
+        caller: ctx.sender(),
+        quantity,
+    });
+}
+
+/// Operator-only. Pull the PredictManager's full quote balance back to
+/// vault.cash. Used after redeem_settled_hedge_permissionless (or any
+/// other source of leftover manager balance).
+public fun sweep_manager_to_vault<T>(
+    vault: &mut Vault<T>,
+    manager: &mut PredictManager,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == vault.operator, E_NOT_OPERATOR);
+    assert!(option::is_some(&vault.predict_manager_id), E_MANAGER_NOT_SET);
+    let expected_manager_id = *option::borrow(&vault.predict_manager_id);
+    assert!(object::id(manager) == expected_manager_id, E_WRONG_MANAGER);
+
+    let manager_balance = predict_manager::balance<T>(manager);
+    let cash_returned = if (manager_balance > 0) {
+        let cash_coin = predict_manager::withdraw<T>(manager, manager_balance, ctx);
+        balance::join(&mut vault.cash, coin::into_balance(cash_coin));
+        manager_balance
+    } else {
+        0
+    };
+
+    event::emit(ManagerSwept {
+        vault_id: object::id(vault),
+        manager_id: object::id(manager),
+        operator: ctx.sender(),
         cash_returned,
     });
 }
