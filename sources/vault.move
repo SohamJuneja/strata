@@ -75,6 +75,14 @@ public struct HedgeBought has copy, drop {
     cash_budget: u64,
 }
 
+public struct HedgeRedeemed has copy, drop {
+    vault_id: ID,
+    manager_id: ID,
+    operator: address,
+    quantity: u64,
+    cash_returned: u64,
+}
+
 // --- Errors ---
 
 const E_ZERO_AMOUNT: u64 = 0;
@@ -189,8 +197,6 @@ public fun withdraw<T>(
 
 // --- Strategy flows (operator-gated) ---
 
-/// Move `amount` of cash from the vault into PLP via predict::supply.
-/// Operator-only.
 public fun deploy_to_predict<T>(
     vault: &mut Vault<T>,
     predict: &mut Predict,
@@ -217,8 +223,6 @@ public fun deploy_to_predict<T>(
     });
 }
 
-/// Burn `plp_amount` PLP from the vault via predict::withdraw, joining
-/// the returned quote into vault.cash. Operator-only.
 public fun redeem_from_predict<T>(
     vault: &mut Vault<T>,
     predict: &mut Predict,
@@ -246,17 +250,7 @@ public fun redeem_from_predict<T>(
 }
 
 /// Buy a directional binary position as a hedge.
-///
-/// Flow: vault.cash -> PredictManager balance -> predict::mint takes
-/// cost from manager balance, creates position quantity inside the
-/// manager. Any cash deposited above the actual cost remains in the
-/// manager's balance for the next call.
-///
-/// Strategy module computes MarketKey (oracle, expiry, strike, is_up),
-/// quantity, and cash_budget. This function just executes.
-///
-/// Operator-only. The supplied PredictManager must match the one
-/// linked to this vault via setup_predict_manager.
+/// See module-level docs for the cash routing flow.
 public fun buy_hedge<T>(
     vault: &mut Vault<T>,
     predict: &mut Predict,
@@ -277,13 +271,10 @@ public fun buy_hedge<T>(
     assert!(cash_budget > 0, E_ZERO_AMOUNT);
     assert!(balance::value(&vault.cash) >= cash_budget, E_INSUFFICIENT_LIQUIDITY);
 
-    // Move cash from vault into the manager so predict::mint can spend it.
     let cash_split = balance::split(&mut vault.cash, cash_budget);
     let cash_coin = coin::from_balance(cash_split, ctx);
     predict_manager::deposit(manager, cash_coin, ctx);
 
-    // Mint binary position. predict::mint internally withdraws the actual
-    // cost from the manager balance and increases the position quantity.
     predict::mint<T>(predict, manager, oracle, key, quantity, clock, ctx);
 
     event::emit(HedgeBought {
@@ -295,10 +286,55 @@ public fun buy_hedge<T>(
     });
 }
 
+/// Redeem a binary position. Payout is deposited into the manager
+/// balance internally by predict::redeem; we then sweep the full
+/// manager balance back to vault.cash.
+///
+/// Assumes the serial PLP+Hedge strategy: one hedge open at a time,
+/// so sweeping the full manager balance is safe. If we run parallel
+/// hedges in V2, this needs to track and pull just the delta.
+///
+/// Operator-only. Manager must match the linked one.
+public fun redeem_hedge<T>(
+    vault: &mut Vault<T>,
+    predict: &mut Predict,
+    manager: &mut PredictManager,
+    oracle: &OracleSVI,
+    key: MarketKey,
+    quantity: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == vault.operator, E_NOT_OPERATOR);
+    assert!(option::is_some(&vault.predict_manager_id), E_MANAGER_NOT_SET);
+    let expected_manager_id = *option::borrow(&vault.predict_manager_id);
+    assert!(object::id(manager) == expected_manager_id, E_WRONG_MANAGER);
+    assert!(quantity > 0, E_ZERO_AMOUNT);
+
+    // Redeem the position. Payout lands in manager balance.
+    predict::redeem<T>(predict, manager, oracle, key, quantity, clock, ctx);
+
+    // Sweep everything in the manager balance back to vault.cash.
+    let manager_balance = predict_manager::balance<T>(manager);
+    let cash_returned = if (manager_balance > 0) {
+        let cash_coin = predict_manager::withdraw<T>(manager, manager_balance, ctx);
+        balance::join(&mut vault.cash, coin::into_balance(cash_coin));
+        manager_balance
+    } else {
+        0
+    };
+
+    event::emit(HedgeRedeemed {
+        vault_id: object::id(vault),
+        manager_id: object::id(manager),
+        operator: ctx.sender(),
+        quantity,
+        cash_returned,
+    });
+}
+
 // --- View functions ---
 
-/// Vault NAV in quote units. Currently cash-only. Adding PLP-to-quote
-/// pricing and position pricing in a follow-up commit.
 public fun nav<T>(vault: &Vault<T>): u64 {
     balance::value(&vault.cash)
 }
