@@ -1,0 +1,41 @@
+# Move build artifacts
+build/
+
+# Node.js (for future frontend and keeper)
+node_modules/
+.next/
+out/
+dist/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+sui.keystore
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Hackathon-specific
+notes.md
+scratch/
+.claude/
