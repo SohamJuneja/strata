@@ -64,6 +64,19 @@ All take generic `Quote` (we always use DUSDC):
 - `min_deposit_dusdc`: 10_000_000 (10 dUSDC at 6 decimals, TBC)
 - Rebalance: triggered on oracle settlement, called via keeper
 
+## Architecture decisions (V1)
+
+### Operator-key pattern for strategy moves
+
+PredictManager has a strict `ctx.sender() == owner` check on deposit, withdraw, and mint. This means a smart contract cannot act on behalf of a PredictManager. Our V1 workaround:
+
+- The Vault struct has an explicit `operator: address` field, set at `create_vault` time.
+- The PredictManager owned by that operator is linked to the vault via `setup_predict_manager`.
+- All strategy moves (`deploy_to_predict`, `buy_hedge`, `roll`) require `ctx.sender() == vault.operator`.
+- Users freely deposit and withdraw vault shares — no operator gate on user-facing flows.
+
+Trust assumption: operator key compromise = vault drain. For V2 we target Sui multi-sig or threshold signing for the operator role. Feedback for the DeepBook team about a transferable OperatorCap pattern has been raised.
+
 ## Critical gotchas
 
 - Quote asset is dUSDC, NOT regular USDC.
