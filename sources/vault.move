@@ -4,9 +4,9 @@
 /// from the supply leg of the strategy.
 ///
 /// User flows (deposit, withdraw) are unrestricted. Strategy flows
-/// (deploy_to_predict, buy_hedge, roll) require ctx.sender() == operator.
-/// See CLAUDE.md "Architecture decisions" for the V1 operator-key
-/// rationale.
+/// (deploy_to_predict, redeem_from_predict, buy_hedge, roll) require
+/// ctx.sender() == operator. See CLAUDE.md "Architecture decisions"
+/// for the V1 operator-key rationale.
 module strata::vault;
 
 use std::option::{Self, Option};
@@ -19,21 +19,12 @@ use deepbook_predict::plp::PLP;
 use deepbook_predict::predict::{Self, Predict};
 use strata::vault_share::{Self, ShareTreasury, VAULT_SHARE};
 
-/// Vault state. Generic over quote asset T. V1 runs a single dUSDC-typed
-/// vault. Future strategies could instantiate vaults over BTC, SUI, etc.
 public struct Vault<phantom T> has key {
     id: UID,
-    /// Cash sitting in the vault, not yet deployed to the strategy.
     cash: Balance<T>,
-    /// PLP minted by predict::supply. Each unit redeems for
-    /// vault_value / plp_total_supply of quote (via predict::withdraw).
     plp_balance: Balance<PLP>,
-    /// ID of the ShareTreasury this vault is paired with.
     share_treasury_id: ID,
-    /// Address authorized to perform strategy moves.
     operator: address,
-    /// PredictManager linked to this vault. None until
-    /// setup_predict_manager is called.
     predict_manager_id: Option<ID>,
 }
 
@@ -66,6 +57,13 @@ public struct DeployedToPredict has copy, drop {
     plp_minted: u64,
 }
 
+public struct RedeemedFromPredict has copy, drop {
+    vault_id: ID,
+    operator: address,
+    plp_burned: u64,
+    cash_returned: u64,
+}
+
 // --- Errors ---
 
 const E_ZERO_AMOUNT: u64 = 0;
@@ -76,9 +74,6 @@ const E_MANAGER_ALREADY_SET: u64 = 4;
 
 // --- Constructor ---
 
-/// Create and share a new vault paired with the given ShareTreasury and
-/// operator. The operator is responsible for setting up the PredictManager
-/// and for all subsequent strategy moves.
 public fun create_vault<T>(
     share_treasury: &ShareTreasury,
     operator: address,
@@ -95,8 +90,6 @@ public fun create_vault<T>(
     transfer::share_object(vault);
 }
 
-/// Create a PredictManager owned by the operator and link it to this
-/// vault. Only callable by the operator. Can only succeed once.
 public fun setup_predict_manager<T>(vault: &mut Vault<T>, ctx: &mut TxContext) {
     assert!(ctx.sender() == vault.operator, E_NOT_OPERATOR);
     assert!(option::is_none(&vault.predict_manager_id), E_MANAGER_ALREADY_SET);
@@ -113,7 +106,6 @@ public fun setup_predict_manager<T>(vault: &mut Vault<T>, ctx: &mut TxContext) {
 
 // --- User flows (unrestricted) ---
 
-/// Deposit quote asset into the vault and receive vault shares.
 public fun deposit<T>(
     vault: &mut Vault<T>,
     share_treasury: &mut ShareTreasury,
@@ -148,7 +140,6 @@ public fun deposit<T>(
     shares
 }
 
-/// Burn vault shares and receive proportional quote asset back.
 public fun withdraw<T>(
     vault: &mut Vault<T>,
     share_treasury: &mut ShareTreasury,
@@ -186,9 +177,6 @@ public fun withdraw<T>(
 // --- Strategy flows (operator-gated) ---
 
 /// Move `amount` of cash from the vault into PLP via predict::supply.
-/// The minted PLP is held by the vault as a Balance<PLP> and counts
-/// toward NAV (per Predict's vault accounting).
-///
 /// Operator-only.
 public fun deploy_to_predict<T>(
     vault: &mut Vault<T>,
@@ -216,12 +204,43 @@ public fun deploy_to_predict<T>(
     });
 }
 
+/// Burn `plp_amount` PLP from the vault via predict::withdraw, joining
+/// the returned quote into vault.cash. Operator-only.
+///
+/// Note: predict::withdraw enforces a per-protocol withdrawal rate
+/// limiter and an "available" check (vault balance minus open max
+/// payouts). Both can abort. For V1 testing this is fine; for V2 we
+/// may want a queue/retry mechanism.
+public fun redeem_from_predict<T>(
+    vault: &mut Vault<T>,
+    predict: &mut Predict,
+    clock: &Clock,
+    plp_amount: u64,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == vault.operator, E_NOT_OPERATOR);
+    assert!(plp_amount > 0, E_ZERO_AMOUNT);
+    assert!(balance::value(&vault.plp_balance) >= plp_amount, E_INSUFFICIENT_LIQUIDITY);
+
+    let plp_split = balance::split(&mut vault.plp_balance, plp_amount);
+    let plp_coin = coin::from_balance(plp_split, ctx);
+    let quote_coin = predict::withdraw<T>(predict, plp_coin, clock, ctx);
+
+    let cash_returned = coin::value(&quote_coin);
+    balance::join(&mut vault.cash, coin::into_balance(quote_coin));
+
+    event::emit(RedeemedFromPredict {
+        vault_id: object::id(vault),
+        operator: ctx.sender(),
+        plp_burned: plp_amount,
+        cash_returned,
+    });
+}
+
 // --- View functions ---
 
-/// Vault NAV in quote units. TODO: this is currently cash-only. Once we
-/// add PLP-to-quote pricing (cash + plp_balance * vault_value /
-/// total_plp_supply, read from the Predict shared object), NAV becomes
-/// accurate post-deploy.
+/// Vault NAV in quote units. Currently cash-only. Adding PLP-to-quote
+/// pricing in a follow-up commit.
 public fun nav<T>(vault: &Vault<T>): u64 {
     balance::value(&vault.cash)
 }
