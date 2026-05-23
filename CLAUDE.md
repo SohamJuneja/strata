@@ -77,6 +77,14 @@ PredictManager has a strict `ctx.sender() == owner` check on deposit, withdraw, 
 
 Trust assumption: operator key compromise = vault drain. For V2 we target Sui multi-sig or threshold signing for the operator role. Feedback for the DeepBook team about a transferable OperatorCap pattern has been raised.
 
+### Epoch deposit windows for share pricing correctness
+
+Predict doesn't expose `vault_value()` or PLP total supply on its shared object, so external vaults can't compute PLP-to-quote value externally. We can't do continuous Yearn-style NAV pricing.
+
+V1 workaround: epoch deposit windows. Vault has a `deposit_window_open` boolean. When true, deposits and withdrawals are accepted and the vault is 100% cash (cash-based NAV is exact). Before deploying capital, the operator closes the window. After redeeming back to cash, the operator reopens.
+
+This is the Ribbon v1 pattern. Trade-off: deposits can only happen during quiet periods between cycles, not continuously. V2 either gets continuous deposits via Predict exposing the pricing accessors (raised with DeepBook team), or moves to an epoch-with-queue model where late deposits queue for the next window.
+
 ## Critical gotchas
 
 - Quote asset is dUSDC, NOT regular USDC.
