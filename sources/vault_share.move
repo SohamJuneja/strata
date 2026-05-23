@@ -69,3 +69,12 @@ public(package) fun burn(treasury: &mut ShareTreasury, shares: Coin<VAULT_SHARE>
 public fun total_supply(treasury: &ShareTreasury): u64 {
     coin::total_supply(&treasury.treasury_cap)
 }
+
+// --- Test helpers ---
+
+/// Bootstrap a ShareTreasury for tests, bypassing the OTW dance.
+/// Test-only by attribute, never present in production builds.
+#[test_only]
+public fun init_for_testing(ctx: &mut TxContext) {
+    init(VAULT_SHARE {}, ctx);
+}
