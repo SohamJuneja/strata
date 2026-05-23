@@ -194,7 +194,7 @@ fun deposit_zero_aborts() {
 }
 
 #[test]
-fun new_vault_has_operator_set_and_manager_unset() {
+fun new_vault_has_correct_initial_state() {
     let mut scenario = test_scenario::begin(ALICE);
     setup(&mut scenario);
 
@@ -203,6 +203,8 @@ fun new_vault_has_operator_set_and_manager_unset() {
 
     assert!(vault::operator(&vault) == ADMIN, 0);
     assert!(option::is_none(&vault::predict_manager_id(&vault)), 1);
+    assert!(vault::cash(&vault) == 0, 2);
+    assert!(vault::plp_balance(&vault) == 0, 3);
 
     test_scenario::return_shared(vault);
     scenario.end();

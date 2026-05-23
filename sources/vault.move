@@ -1,19 +1,22 @@
 /// Core vault for Strata. Holds user-deposited quote asset, mints and
-/// burns vault shares against current NAV, and owns a PredictManager
-/// (via the linked manager ID) that strategy modules act through.
+/// burns vault shares against current NAV, owns a PredictManager (via
+/// the linked manager ID) for binary positions, and accumulates PLP
+/// from the supply leg of the strategy.
 ///
 /// User flows (deposit, withdraw) are unrestricted. Strategy flows
 /// (deploy_to_predict, buy_hedge, roll) require ctx.sender() == operator.
 /// See CLAUDE.md "Architecture decisions" for the V1 operator-key
-/// rationale and the V2 multi-sig migration plan.
+/// rationale.
 module strata::vault;
 
 use std::option::{Self, Option};
 use sui::balance::{Self, Balance};
+use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::event;
 
-use deepbook_predict::predict;
+use deepbook_predict::plp::PLP;
+use deepbook_predict::predict::{Self, Predict};
 use strata::vault_share::{Self, ShareTreasury, VAULT_SHARE};
 
 /// Vault state. Generic over quote asset T. V1 runs a single dUSDC-typed
@@ -22,16 +25,15 @@ public struct Vault<phantom T> has key {
     id: UID,
     /// Cash sitting in the vault, not yet deployed to the strategy.
     cash: Balance<T>,
-    /// ID of the ShareTreasury this vault is paired with. Enforced on
-    /// every deposit and withdraw so a malicious caller cannot pass a
-    /// different treasury and break accounting.
+    /// PLP minted by predict::supply. Each unit redeems for
+    /// vault_value / plp_total_supply of quote (via predict::withdraw).
+    plp_balance: Balance<PLP>,
+    /// ID of the ShareTreasury this vault is paired with.
     share_treasury_id: ID,
-    /// Address authorized to perform strategy moves. Must match the
-    /// owner of the PredictManager linked via setup_predict_manager.
+    /// Address authorized to perform strategy moves.
     operator: address,
     /// PredictManager linked to this vault. None until
-    /// setup_predict_manager is called. Once set, the vault is
-    /// permanently linked to that manager.
+    /// setup_predict_manager is called.
     predict_manager_id: Option<ID>,
 }
 
@@ -57,6 +59,13 @@ public struct PredictManagerLinked has copy, drop {
     operator: address,
 }
 
+public struct DeployedToPredict has copy, drop {
+    vault_id: ID,
+    operator: address,
+    cash_in: u64,
+    plp_minted: u64,
+}
+
 // --- Errors ---
 
 const E_ZERO_AMOUNT: u64 = 0;
@@ -68,9 +77,8 @@ const E_MANAGER_ALREADY_SET: u64 = 4;
 // --- Constructor ---
 
 /// Create and share a new vault paired with the given ShareTreasury and
-/// operator. The operator address is responsible for setting up the
-/// PredictManager (via setup_predict_manager) and for all subsequent
-/// strategy moves.
+/// operator. The operator is responsible for setting up the PredictManager
+/// and for all subsequent strategy moves.
 public fun create_vault<T>(
     share_treasury: &ShareTreasury,
     operator: address,
@@ -79,6 +87,7 @@ public fun create_vault<T>(
     let vault = Vault<T> {
         id: object::new(ctx),
         cash: balance::zero(),
+        plp_balance: balance::zero(),
         share_treasury_id: object::id(share_treasury),
         operator,
         predict_manager_id: option::none(),
@@ -87,8 +96,7 @@ public fun create_vault<T>(
 }
 
 /// Create a PredictManager owned by the operator and link it to this
-/// vault. Only callable by the operator. Idempotent: can only succeed
-/// once per vault.
+/// vault. Only callable by the operator. Can only succeed once.
 public fun setup_predict_manager<T>(vault: &mut Vault<T>, ctx: &mut TxContext) {
     assert!(ctx.sender() == vault.operator, E_NOT_OPERATOR);
     assert!(option::is_none(&vault.predict_manager_id), E_MANAGER_ALREADY_SET);
@@ -103,11 +111,9 @@ public fun setup_predict_manager<T>(vault: &mut Vault<T>, ctx: &mut TxContext) {
     });
 }
 
-// --- Core flows ---
+// --- User flows (unrestricted) ---
 
 /// Deposit quote asset into the vault and receive vault shares.
-/// Returns the minted shares so the caller can compose with other
-/// Sui DeFi in the same PTB.
 public fun deposit<T>(
     vault: &mut Vault<T>,
     share_treasury: &mut ShareTreasury,
@@ -143,7 +149,6 @@ public fun deposit<T>(
 }
 
 /// Burn vault shares and receive proportional quote asset back.
-/// Returns the quote asset coin so the caller can compose.
 public fun withdraw<T>(
     vault: &mut Vault<T>,
     share_treasury: &mut ShareTreasury,
@@ -178,17 +183,55 @@ public fun withdraw<T>(
     out_coin
 }
 
+// --- Strategy flows (operator-gated) ---
+
+/// Move `amount` of cash from the vault into PLP via predict::supply.
+/// The minted PLP is held by the vault as a Balance<PLP> and counts
+/// toward NAV (per Predict's vault accounting).
+///
+/// Operator-only.
+public fun deploy_to_predict<T>(
+    vault: &mut Vault<T>,
+    predict: &mut Predict,
+    clock: &Clock,
+    amount: u64,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == vault.operator, E_NOT_OPERATOR);
+    assert!(amount > 0, E_ZERO_AMOUNT);
+    assert!(balance::value(&vault.cash) >= amount, E_INSUFFICIENT_LIQUIDITY);
+
+    let cash_split = balance::split(&mut vault.cash, amount);
+    let cash_coin = coin::from_balance(cash_split, ctx);
+    let plp_coin = predict::supply<T>(predict, cash_coin, clock, ctx);
+
+    let plp_minted = coin::value(&plp_coin);
+    balance::join(&mut vault.plp_balance, coin::into_balance(plp_coin));
+
+    event::emit(DeployedToPredict {
+        vault_id: object::id(vault),
+        operator: ctx.sender(),
+        cash_in: amount,
+        plp_minted,
+    });
+}
+
 // --- View functions ---
 
-/// Current vault NAV. Cash-only for this iteration. Once positions are
-/// deployed to Predict, this becomes cash + manager balance + position
-/// values priced from current oracle state.
+/// Vault NAV in quote units. TODO: this is currently cash-only. Once we
+/// add PLP-to-quote pricing (cash + plp_balance * vault_value /
+/// total_plp_supply, read from the Predict shared object), NAV becomes
+/// accurate post-deploy.
 public fun nav<T>(vault: &Vault<T>): u64 {
     balance::value(&vault.cash)
 }
 
 public fun cash<T>(vault: &Vault<T>): u64 {
     balance::value(&vault.cash)
+}
+
+public fun plp_balance<T>(vault: &Vault<T>): u64 {
+    balance::value(&vault.plp_balance)
 }
 
 public fun operator<T>(vault: &Vault<T>): address {
