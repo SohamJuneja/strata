@@ -26,6 +26,19 @@ The pitch: "PLP yield minus crash insurance, with vault shares you can borrow ag
 
 If you see other testnet IDs in old docs or examples, ignore them. The above are the current deployment.
 
+### Strata testnet deployment
+
+Published: today (initial publish)
+
+- Package: `0x27466001865a80e5733ed4e16529375f063c602b6eb22b4ca86dda525797745a`
+- ShareTreasury (shared, used in deposit/withdraw): `0xcbfcbda351fc696469532fb7590fc489fce6ece091a38e1f449180168c70e75d`
+- VAULT_SHARE Currency object: `0x75628d2a40d0d44299eca9eea56e0f7bfe311da1683c9be20bae8b9d8072d2e2`
+- MetadataCap (owned by deployer): `0x3b612088a16ad07c655390c4379229a70c3cd4b9977ab61153a7213f14d18f39`
+- UpgradeCap (owned by deployer): `0xf486b33b08fb12b5876d91cd0315e02d862b66087531f0382d374aaeab2a1177`
+- Deployer / Operator address: `0x18a1b106192a3fed987dd1b58ab5ce3de052a06234ee21afa830eccd793928d7`
+
+Modules: strategy_plp_hedge, vault, vault_share
+
 ## Predict model (essential facts)
 
 - `Predict` is the top-level shared protocol object (one global instance)
