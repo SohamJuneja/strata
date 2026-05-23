@@ -1,6 +1,7 @@
 #[test_only]
 module strata::vault_tests;
 
+use std::option;
 use sui::coin::{Self, Coin};
 use sui::test_scenario::{Self, Scenario};
 use std::unit_test;
@@ -18,6 +19,7 @@ const BOB: address = @0xBB;
 // === Helpers ===
 
 /// Initialize the share module and create a MOCK_USDC vault.
+/// ADMIN doubles as the operator in tests.
 fun setup(scenario: &mut Scenario) {
     scenario.next_tx(ADMIN);
     {
@@ -26,7 +28,7 @@ fun setup(scenario: &mut Scenario) {
     scenario.next_tx(ADMIN);
     {
         let treasury = scenario.take_shared<ShareTreasury>();
-        vault::create_vault<MOCK_USDC>(&treasury, scenario.ctx());
+        vault::create_vault<MOCK_USDC>(&treasury, ADMIN, scenario.ctx());
         test_scenario::return_shared(treasury);
     };
 }
@@ -69,12 +71,10 @@ fun second_deposit_is_proportional_to_nav() {
     let mut vault = scenario.take_shared<Vault<MOCK_USDC>>();
     let mut treasury = scenario.take_shared<ShareTreasury>();
 
-    // First deposit: 1000 in, 1000 shares out
     let first = mint_mock(1000, scenario.ctx());
     let first_shares = vault::deposit(&mut vault, &mut treasury, first, scenario.ctx());
     unit_test::destroy(first_shares);
 
-    // Second deposit: 500 in. NAV=1000, supply=1000, so shares = 500*1000/1000 = 500
     let second = mint_mock(500, scenario.ctx());
     let second_shares = vault::deposit(&mut vault, &mut treasury, second, scenario.ctx());
 
@@ -126,7 +126,6 @@ fun partial_withdraw_returns_proportional_funds() {
     let payment = mint_mock(1000, scenario.ctx());
     let mut shares = vault::deposit(&mut vault, &mut treasury, payment, scenario.ctx());
 
-    // Split off half and withdraw
     let half = coin::split(&mut shares, 500, scenario.ctx());
     let withdrawn = vault::withdraw(&mut vault, &mut treasury, half, scenario.ctx());
 
@@ -148,7 +147,6 @@ fun two_depositors_share_pool_correctly() {
     let mut scenario = test_scenario::begin(ADMIN);
     setup(&mut scenario);
 
-    // Alice deposits 1000, gets 1000 shares
     scenario.next_tx(ALICE);
     let mut vault = scenario.take_shared<Vault<MOCK_USDC>>();
     let mut treasury = scenario.take_shared<ShareTreasury>();
@@ -159,7 +157,6 @@ fun two_depositors_share_pool_correctly() {
     test_scenario::return_shared(vault);
     test_scenario::return_shared(treasury);
 
-    // Bob deposits 500, gets 500 shares (NAV ratio unchanged)
     scenario.next_tx(BOB);
     let mut vault = scenario.take_shared<Vault<MOCK_USDC>>();
     let mut treasury = scenario.take_shared<ShareTreasury>();
@@ -193,5 +190,20 @@ fun deposit_zero_aborts() {
     unit_test::destroy(shares);
     test_scenario::return_shared(vault);
     test_scenario::return_shared(treasury);
+    scenario.end();
+}
+
+#[test]
+fun new_vault_has_operator_set_and_manager_unset() {
+    let mut scenario = test_scenario::begin(ALICE);
+    setup(&mut scenario);
+
+    scenario.next_tx(ALICE);
+    let vault = scenario.take_shared<Vault<MOCK_USDC>>();
+
+    assert!(vault::operator(&vault) == ADMIN, 0);
+    assert!(option::is_none(&vault::predict_manager_id(&vault)), 1);
+
+    test_scenario::return_shared(vault);
     scenario.end();
 }
