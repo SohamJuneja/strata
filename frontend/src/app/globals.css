@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  /* Dark editorial palette - warm dark espresso instead of harsh black */
+  --color-paper: #14110D;
+  --color-paper-raised: #1F1B16;
+  --color-paper-sunken: #0D0B08;
+  --color-ink: #F5F0E5;
+  --color-ink-secondary: #C2B8A6;
+  --color-ink-muted: #8F8674;
+  --color-border: #3A3530;
+  --color-accent: #E07B3E;
+  --color-accent-hover: #F39252;
+  --color-positive: #4A9B7E;
+  --color-negative: #C25450;
+
+  /* Typography */
+  --font-display: var(--font-instrument-serif), Georgia, serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+  }
+  .font-mono, code, pre {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+}
