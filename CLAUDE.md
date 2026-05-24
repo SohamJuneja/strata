@@ -28,16 +28,26 @@ If you see other testnet IDs in old docs or examples, ignore them. The above are
 
 ### Strata testnet deployment
 
-Published: today (initial publish)
+Bootstrap complete — fully live on testnet.
 
-- Package: `0x27466001865a80e5733ed4e16529375f063c602b6eb22b4ca86dda525797745a`
-- ShareTreasury (shared, used in deposit/withdraw): `0xcbfcbda351fc696469532fb7590fc489fce6ece091a38e1f449180168c70e75d`
+**Core**
+- Strata Package: `0x27466001865a80e5733ed4e16529375f063c602b6eb22b4ca86dda525797745a`
+- ShareTreasury (shared): `0xcbfcbda351fc696469532fb7590fc489fce6ece091a38e1f449180168c70e75d`
 - VAULT_SHARE Currency object: `0x75628d2a40d0d44299eca9eea56e0f7bfe311da1683c9be20bae8b9d8072d2e2`
-- MetadataCap (owned by deployer): `0x3b612088a16ad07c655390c4379229a70c3cd4b9977ab61153a7213f14d18f39`
-- UpgradeCap (owned by deployer): `0xf486b33b08fb12b5876d91cd0315e02d862b66087531f0382d374aaeab2a1177`
-- Deployer / Operator address: `0x18a1b106192a3fed987dd1b58ab5ce3de052a06234ee21afa830eccd793928d7`
 
-Modules: strategy_plp_hedge, vault, vault_share
+**Vault instance (V1 PLP+Hedge on dUSDC)**
+- Vault<DUSDC> (shared): `0xaa1abbf4bc1328c41f1ce635cc4d974889bb90989244c248c40bb80f33a9206e`
+- PredictManager (shared, owned by operator): `0x99b20ae30ba4bdc19e8e0d7d54d8ce84e55452dbd6ae046d10b1f062b80cec07`
+- BalanceManager (inside PredictManager): `0x2390c219002889b6737be67cc9fadc885cdd412141a9d6b8c1e5f6348c01217f`
+- StrategyConfig (shared, defaults: 1000 bps hedge ratio, 500 bps strike offset): `0xc6b1a0fd5d8ae153ab3099a7ba95dbc940edb2ff3f938c6748e27be8157e3172`
+
+**Capabilities (held by operator)**
+- MetadataCap: `0x3b612088a16ad07c655390c4379229a70c3cd4b9977ab61153a7213f14d18f39`
+- UpgradeCap: `0xf486b33b08fb12b5876d91cd0315e02d862b66087531f0382d374aaeab2a1177`
+
+**Operator address**: `0x18a1b106192a3fed987dd1b58ab5ce3de052a06234ee21afa830eccd793928d7`
+
+Modules: vault, vault_share, strategy_plp_hedge
 
 ## Predict model (essential facts)
 
