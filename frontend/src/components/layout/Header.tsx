@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Container } from "@/components/ui/Container";
+import { ConnectWalletButton } from "@/components/wallet/ConnectWalletButton";
 
 export function Header() {
   return (
@@ -9,7 +10,7 @@ export function Header() {
         <nav className="flex items-center gap-6 md:gap-10">
           <Link href="/vault/strata-plp-hedge" className="text-sm text-ink-secondary hover:text-ink transition-colors">Vault</Link>
           <Link href="#thesis" className="text-sm text-ink-secondary hover:text-ink transition-colors">Thesis</Link>
-          <button type="button" className="bg-accent text-paper px-5 py-2 font-mono text-xs font-semibold uppercase tracking-widest hover:bg-accent-hover transition-colors cursor-pointer">Connect Wallet</button>
+          <ConnectWalletButton />
         </nav>
       </Container>
     </header>
