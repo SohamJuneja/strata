@@ -1,6 +1,8 @@
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Container } from "@/components/ui/Container";
+import { VaultNAVHero, PositionStateRow } from "@/components/vault/LiveStats";
+import { DepositForm } from "@/components/vault/DepositForm";
 
 export default function VaultDetailPage() {
   return (
@@ -20,9 +22,7 @@ export default function VaultDetailPage() {
                 </div>
               </div>
               <div className="lg:col-span-5 lg:text-right">
-                <p className="font-mono text-xs uppercase tracking-widest text-ink-muted">Current NAV</p>
-                <p className="mt-3 font-mono text-5xl lg:text-6xl tabular-nums text-ink">$0.00</p>
-                <p className="mt-2 font-mono text-xs text-ink-muted">0 shares outstanding</p>
+                <VaultNAVHero />
               </div>
             </div>
           </Container>
@@ -37,32 +37,7 @@ export default function VaultDetailPage() {
                     <button type="button" className="font-mono text-xs uppercase tracking-widest pb-4 border-b-2 border-accent text-accent cursor-pointer">Deposit</button>
                     <button type="button" className="font-mono text-xs uppercase tracking-widest pb-4 text-ink-muted hover:text-ink transition-colors cursor-pointer">Withdraw</button>
                   </div>
-                  <div className="space-y-6">
-                    <div>
-                      <label className="font-mono text-xs uppercase tracking-widest text-ink-muted">Amount</label>
-                      <div className="mt-3 flex items-center gap-3 border border-border bg-paper px-4 py-3">
-                        <input type="text" placeholder="0.00" className="flex-1 bg-transparent font-mono text-xl tabular-nums text-ink placeholder:text-ink-muted focus:outline-none" />
-                        <span className="font-mono text-sm text-ink-secondary">dUSDC</span>
-                        <button type="button" className="font-mono text-xs uppercase tracking-widest text-accent hover:text-accent-hover transition-colors cursor-pointer">Max</button>
-                      </div>
-                    </div>
-                    <div className="border-t border-border pt-6 space-y-3">
-                      <div className="flex justify-between font-mono text-sm">
-                        <span className="text-ink-muted">You will receive</span>
-                        <span className="text-ink tabular-nums">0.00 STRATA-PH</span>
-                      </div>
-                      <div className="flex justify-between font-mono text-sm">
-                        <span className="text-ink-muted">Share price</span>
-                        <span className="text-ink tabular-nums">1.0000 dUSDC</span>
-                      </div>
-                      <div className="flex justify-between font-mono text-sm">
-                        <span className="text-ink-muted">Deposit window</span>
-                        <span className="text-positive">Open</span>
-                      </div>
-                    </div>
-                    <button type="button" className="w-full bg-accent text-paper py-4 font-mono text-sm font-semibold uppercase tracking-widest hover:bg-accent-hover transition-colors cursor-pointer">Deposit dUSDC</button>
-                    <p className="font-mono text-xs text-ink-muted text-center">Connect your wallet to deposit. dUSDC required.</p>
-                  </div>
+                  <DepositForm />
                 </div>
               </div>
 
@@ -85,23 +60,7 @@ export default function VaultDetailPage() {
         <section className="border-b border-border bg-paper-raised py-16 lg:py-24">
           <Container>
             <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-8">Position State</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div>
-                <p className="font-mono text-xs uppercase tracking-widest text-ink-muted">Cash</p>
-                <p className="mt-3 font-mono text-3xl tabular-nums text-ink">$0.00</p>
-                <p className="mt-2 font-mono text-xs text-ink-muted">undeployed dUSDC</p>
-              </div>
-              <div>
-                <p className="font-mono text-xs uppercase tracking-widest text-ink-muted">PLP Holdings</p>
-                <p className="mt-3 font-mono text-3xl tabular-nums text-ink">0</p>
-                <p className="mt-2 font-mono text-xs text-ink-muted">Predict vault shares</p>
-              </div>
-              <div>
-                <p className="font-mono text-xs uppercase tracking-widest text-ink-muted">Active Hedge</p>
-                <p className="mt-3 font-mono text-3xl tabular-nums text-ink-muted">none</p>
-                <p className="mt-2 font-mono text-xs text-ink-muted">opens after next deploy</p>
-              </div>
-            </div>
+            <PositionStateRow />
           </Container>
         </section>
 

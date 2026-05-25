@@ -1,6 +1,7 @@
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Container } from "@/components/ui/Container";
+import { HomepageStatsRow } from "@/components/vault/LiveStats";
 
 export default function HomePage() {
   return (
@@ -43,10 +44,8 @@ export default function HomePage() {
                 <h2 className="font-display text-5xl lg:text-6xl leading-tight tracking-tight text-ink">STRATA-PH</h2>
                 <p className="mt-4 text-ink-secondary text-lg">PLP+Hedge strategy on dUSDC. Live on Sui testnet.</p>
               </div>
-              <div className="lg:col-span-7 grid grid-cols-3 gap-6 lg:gap-12">
-                <Stat label="NAV" value="$0" />
-                <Stat label="Shares" value="0" />
-                <Stat label="Hedge Ratio" value="10%" />
+              <div className="lg:col-span-7">
+                <HomepageStatsRow />
               </div>
             </div>
             <div className="mt-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 border-t border-border pt-8">
