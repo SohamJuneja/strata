@@ -2,7 +2,7 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Container } from "@/components/ui/Container";
 import { VaultNAVHero, PositionStateRow } from "@/components/vault/LiveStats";
-import { DepositForm } from "@/components/vault/DepositForm";
+import { DepositWithdrawCard } from "@/components/vault/DepositWithdrawCard";
 
 export default function VaultDetailPage() {
   return (
@@ -32,13 +32,7 @@ export default function VaultDetailPage() {
           <Container>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16">
               <div className="lg:col-span-5">
-                <div className="border border-border bg-paper-raised p-8">
-                  <div className="flex gap-6 mb-8 border-b border-border">
-                    <button type="button" className="font-mono text-xs uppercase tracking-widest pb-4 border-b-2 border-accent text-accent cursor-pointer">Deposit</button>
-                    <button type="button" className="font-mono text-xs uppercase tracking-widest pb-4 text-ink-muted hover:text-ink transition-colors cursor-pointer">Withdraw</button>
-                  </div>
-                  <DepositForm />
-                </div>
+                <DepositWithdrawCard />
               </div>
 
               <div className="lg:col-span-7">
