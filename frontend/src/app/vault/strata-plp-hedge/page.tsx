@@ -28,6 +28,13 @@ export default function VaultDetailPage() {
           </Container>
         </section>
 
+        <section className="border-b border-border bg-paper-raised py-12">
+          <Container>
+            <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-6">Position State</p>
+            <PositionStateRow />
+          </Container>
+        </section>
+
         <section className="border-b border-border py-16 lg:py-24">
           <Container>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16">
@@ -48,13 +55,6 @@ export default function VaultDetailPage() {
                 </div>
               </div>
             </div>
-          </Container>
-        </section>
-
-        <section className="border-b border-border bg-paper-raised py-16 lg:py-24">
-          <Container>
-            <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-8">Position State</p>
-            <PositionStateRow />
           </Container>
         </section>
 
