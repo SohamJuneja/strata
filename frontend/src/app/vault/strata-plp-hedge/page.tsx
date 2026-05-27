@@ -3,6 +3,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Container } from "@/components/ui/Container";
 import { VaultNAVHero, PositionStateRow } from "@/components/vault/LiveStats";
 import { DepositWithdrawCard } from "@/components/vault/DepositWithdrawCard";
+import { MechanismDiagram } from "@/components/vault/MechanismDiagram";
 
 export default function VaultDetailPage() {
   return (
@@ -55,6 +56,19 @@ export default function VaultDetailPage() {
                 </div>
               </div>
             </div>
+          </Container>
+        </section>
+
+        <section className="border-b border-border py-16 lg:py-24">
+          <Container>
+            <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-6">The Mechanism</p>
+            <h2 className="font-display text-4xl lg:text-5xl leading-tight tracking-tight text-ink mb-4">
+              Money <span className="italic text-accent">flowing</span> through one cycle
+            </h2>
+            <p className="text-ink-secondary text-lg max-w-2xl mb-10">
+              Animated trace of how a single deposit moves through the vault, splits into PLP and hedge legs, and returns at settlement.
+            </p>
+            <MechanismDiagram />
           </Container>
         </section>
 
