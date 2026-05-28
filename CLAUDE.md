@@ -31,7 +31,8 @@ If you see other testnet IDs in old docs or examples, ignore them. The above are
 Bootstrap complete — fully live on testnet.
 
 **Core**
-- Strata Package: `0x27466001865a80e5733ed4e16529375f063c602b6eb22b4ca86dda525797745a`
+- Strata Package (logical / original publish): `0x27466001865a80e5733ed4e16529375f063c602b6eb22b4ca86dda525797745a`
+- Strata Package (current, after Range Ladder upgrade): `0xbfb9c946956d1843130a6cbae0475648e57bda3fb644d281c6d89b468437cba1`
 - ShareTreasury (shared): `0xcbfcbda351fc696469532fb7590fc489fce6ece091a38e1f449180168c70e75d`
 - VAULT_SHARE Currency object: `0x75628d2a40d0d44299eca9eea56e0f7bfe311da1683c9be20bae8b9d8072d2e2`
 
@@ -40,6 +41,7 @@ Bootstrap complete — fully live on testnet.
 - PredictManager (shared, owned by operator): `0x99b20ae30ba4bdc19e8e0d7d54d8ce84e55452dbd6ae046d10b1f062b80cec07`
 - BalanceManager (inside PredictManager): `0x2390c219002889b6737be67cc9fadc885cdd412141a9d6b8c1e5f6348c01217f`
 - StrategyConfig (shared, defaults: 1000 bps hedge ratio, 500 bps strike offset): `0xc6b1a0fd5d8ae153ab3099a7ba95dbc940edb2ff3f938c6748e27be8157e3172`
+- StrategyRangeConfig (shared, defaults: 1000 bps ladder width, 5 rungs): `0x9745e85c0930a6d0c06bc9dbbf1fa9b498a28015426d3aa5796ad91f2ba9425f`
 
 **Capabilities (held by operator)**
 - MetadataCap: `0x3b612088a16ad07c655390c4379229a70c3cd4b9977ab61153a7213f14d18f39`
@@ -47,7 +49,7 @@ Bootstrap complete — fully live on testnet.
 
 **Operator address**: `0x18a1b106192a3fed987dd1b58ab5ce3de052a06234ee21afa830eccd793928d7`
 
-Modules: vault, vault_share, strategy_plp_hedge
+Modules at current package: strategy_plp_hedge, strategy_range_ladder, vault, vault_share.
 
 ## Predict model (essential facts)
 

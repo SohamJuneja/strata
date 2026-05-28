@@ -1,10 +1,11 @@
 [package]
 name = "strata"
 edition = "2024.beta"
-version = "0.0.1"
+version = "0.0.2"
+published-at = "0x27466001865a80e5733ed4e16529375f063c602b6eb22b4ca86dda525797745a"
 
 [dependencies]
 deepbook_predict = { local = "../_refs/deepbookv3/packages/predict" }
 
 [addresses]
-strata = "0x0"
+strata = "0x27466001865a80e5733ed4e16529375f063c602b6eb22b4ca86dda525797745a"
