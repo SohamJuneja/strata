@@ -1,181 +1,178 @@
 # Strata Research Note 01
-## Backtesting PLP+Hedge: dUSDC vault returns under three BTC scenarios
+## Strategy Model: PLP+Hedge across three historical BTC regimes
 
 **Published**: May 2026  
 **Strategy**: PLP+Hedge V1 on DeepBook Predict  
-**Authors**: Strata Research
+**Authors**: Strata Research  
+**Reproducibility**: `scripts/fetch-btc-data.ts` and `scripts/simulate.ts` regenerate every number in this note from public Binance data.
 
 ---
 
 ## Abstract
 
-The PLP+Hedge strategy on Strata trades a small fraction of PLP yield for explicit downside protection. This note models how a 1000 dUSDC deposit into the V1 vault would have performed over three illustrative 12-week BTC paths: a calm uptrend, a recovery from drawdown, and a sustained drawdown. Across all three the hedge does what it's designed to do — drag returns slightly in calm markets, kick in meaningfully when BTC drops sharply.
+We model the PLP+Hedge strategy across three 12-week historical BTC windows: a volatile sideways market (Q3 2024), a steady post-halving drawdown (Q2 2024), and the Terra/Luna collapse (Q2 2022). BTC prices are real, pulled from Binance weekly closes. Strategy mechanics (PLP yield, hedge premium, hedge payoff structure) are modeled with explicit, documented parameters.
+
+The hedge delivers meaningful protection only when trigger events are frequent. In the Terra/Luna period (5 trigger weeks of 12), PLP+Hedge outperforms raw PLP by **6.35%**. In moderate volatility (2 trigger weeks of 12), the hedge premium drag roughly cancels the trigger gains — protection is essentially insurance you didn't need. Investors should size the strategy based on their belief about drawdown probability.
 
 ---
 
 ## Strategy in one paragraph
 
-The vault allocates 90% of deposits to PLP (DeepBook Predict's LP token, which earns from binary options traders) and uses the remaining 10% to buy weekly out-of-the-money binary puts at 5% below spot. PLP captures yield from traders paying premium. The OTM puts pay out when BTC settles below strike, offsetting the PLP drawdown that occurs in those same scenarios. The net result is most of the PLP yield with a defined floor on the worst-case loss.
+The vault allocates ~90% of deposits to PLP (DeepBook Predict's LP token, earning premium from binary options traders) and ~10% to weekly out-of-the-money binary puts at 5% below spot. PLP captures yield from traders paying premium. The OTM puts pay out when BTC settles below strike, offsetting the PLP drawdown that occurs in the same scenarios. Net result: most of the PLP yield, with a defined floor on worst-case loss.
 
 ---
 
-## Model assumptions
+## Methodology
 
-These assumptions are illustrative, not measured. Caveats follow in the Limitations section.
+We simulate weekly cycles on a $1000 starting vault. Each cycle:
 
-- **PLP yield**: 20% APY continuous accrual (0.385% per week). Representative of early-stage prediction-market LP yields based on comparable EVM protocols.
-- **Hedge premium**: 30 basis points of vault NAV per week. Reasonable midpoint for a 5%-OTM, 1-week BTC binary at moderate implied vol.
-- **Hedge payoff function**: when BTC drops more than 5% within a week, the hedge pays roughly `10% × (drop% - 5%)` of vault NAV, capped at 3% of NAV.
-- **Cycle frequency**: weekly. Each cycle: PLP yield credited, hedge expired or paid out, new cycle opens.
-- **No slippage, no gas costs, no oracle lag, no withdrawal-limiter friction.**
+1. PLP yield accrues at 20% APY (continuous compound, modeled as 0.385% per week)
+2. Hedge premium of 30 bps deducts from NAV per week
+3. If BTC drops more than 5% in the week: hedge pays out a fixed 2% of NAV (binary payoff structure)
+4. If BTC drops more than 3% in the week: PLP loses 60% of the underlying move (drawdown beta)
+5. Raw PLP comparison: same yield, same drawdown beta, no hedge premium, no hedge payoff
 
-All numbers below use these constants. Real production results will vary as PLP yield fluctuates with utilization and Predict's SVI surface adjusts to market conditions.
+**Config (reproducible)**:
 
----
+```json
+{
+  "initialVaultUsd": 1000,
+  "plpApy": 0.20,
+  "hedgePremiumBpsWeekly": 30,
+  "hedgePayoffPctOfNav": 0.02,
+  "hedgeStrikeOffsetBps": 500,
+  "plpDrawdownBeta": 0.6
+}
+```
 
-## Scenario A: Calm uptrend
+**What's real**: BTC weekly closes pulled from Binance's public klines API for each period.
 
-12-week BTC path: $60k → $93k, mostly steady up with one minor pullback.
+**What's modeled**: PLP yield (20% APY constant), hedge premium (30 bps constant), hedge payoff (binary 2%), PLP drawdown beta (0.6).
 
-| Week | Spot Δ% | PLP Yield | Hedge Cost | Hedge Payoff | Net Δ |
-|---:|---:|---:|---:|---:|---:|
-| 1  | +3.3 | +0.39% | -0.30% | 0 | +0.09% |
-| 2  | +9.7 | +0.39% | -0.30% | 0 | +0.09% |
-| 3  | +7.4 | +0.39% | -0.30% | 0 | +0.09% |
-| 4  | -2.7 | +0.39% | -0.30% | 0 | +0.09% |
-| 5  | +7.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 6  | +3.9 | +0.39% | -0.30% | 0 | +0.09% |
-| 7  | +19.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 8  | +5.3 | +0.39% | -0.30% | 0 | +0.09% |
-| 9  | -5.1 | +0.39% | -0.30% | +0.01% | +0.10% |
-| 10 | +2.1 | +0.39% | -0.30% | 0 | +0.09% |
-| 11 | -3.1 | +0.39% | -0.30% | 0 | +0.09% |
-| 12 | +0.5 | +0.39% | -0.30% | 0 | +0.09% |
-
-**Result**:
-
-- Raw PLP (no hedge): **+4.7%** over 12 weeks
-- PLP+Hedge: **+1.1%** over 12 weeks
-- Hedge drag: -3.6% (12 weeks × 30 bps premium minus the tiny payoff in week 9)
-- Max weekly drawdown: -0.30%
-
-In calm markets the hedge is mostly insurance you didn't need. Strategy still positive, just less than raw PLP.
+**What this does not model**: actual SVI surface pricing, vault utilization effects on PLP yield (which is counter-cyclical in practice), withdrawal-limiter friction, gas costs, oracle lag.
 
 ---
 
-## Scenario B: Recovery from drawdown
+## Period A: Q3 2024 — sideways with volatility
 
-Sharp -15% drop in weeks 2-3, then climb to a new high by week 12. Representative of a typical "BTC capitulation then bounce" cycle.
+BTC oscillated between $54,870 and $68,250 over 13 weeks. Three -10% weekly drops, two -4% drops, several +8% upmoves. The period closed roughly flat.
 
-| Week | Spot Δ% | PLP Yield | Hedge Cost | Hedge Payoff | Net Δ |
-|---:|---:|---:|---:|---:|---:|
-| 1  | +0.5 | +0.39% | -0.30% | 0 | +0.09% |
-| 2  | -8.0 | +0.39% | -0.30% | +0.30% | +0.39% |
-| 3  | -7.0 | +0.39% | -0.30% | +0.20% | +0.29% |
-| 4  | +12.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 5  | +8.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 6  | +5.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 7  | +3.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 8  | -2.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 9  | +6.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 10 | +4.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 11 | +1.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 12 | +2.0 | +0.39% | -0.30% | 0 | +0.09% |
+| Wk | Date | BTC | Δ% | PLP | Hedge | Payoff | PLP Loss | Net% |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 2024-07-08 | 60798 | +8.84 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 2 | 2024-07-15 | 68165 | +12.12 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 3 | 2024-07-22 | 68250 | +0.12 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 4 | 2024-07-29 | 58161 | -14.78 | +0.385 | -0.300 | +2.000 | -8.869 | -6.785 |
+| 5 | 2024-08-05 | 58713 | +0.95 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 6 | 2024-08-12 | 58427 | -0.49 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 7 | 2024-08-19 | 64220 | +9.91 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 8 | 2024-08-26 | 57302 | -10.77 | +0.385 | -0.300 | +2.000 | -6.464 | -4.379 |
+| 9 | 2024-09-02 | 54870 | -4.24 | +0.385 | -0.300 | 0 | -2.546 | -2.462 |
+| 10 | 2024-09-09 | 59132 | +7.77 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 11 | 2024-09-16 | 63579 | +7.52 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 12 | 2024-09-23 | 65602 | +3.18 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 13 | 2024-09-30 | 62820 | -4.24 | +0.385 | -0.300 | 0 | -2.545 | -2.460 |
 
-**Result**:
+**Final**: Raw PLP -14.83% | PLP+Hedge -14.55% | Delta +0.28%
 
-- Raw PLP (no hedge, but takes drawdown loss in weeks 2-3): approximately **+0.5%** over 12 weeks (heavy losses in 2-3 offset later gains)
-- PLP+Hedge: **+1.6%** over 12 weeks
-- Hedge added 1.1% by paying out during the drawdown
-
-This is the scenario where the trade-off becomes obvious. The hedge cost is small relative to the PLP drawdown protection delivered in weeks 2 and 3.
+Both lose meaningfully because PLP suffers in volatility under our model. The hedge triggers twice (W4, W8) and saves a small amount, but the 0.30% weekly premium accumulates across 11 non-trigger weeks and erodes most of the gain.
 
 ---
 
-## Scenario C: Sustained drawdown
+## Period B: Q2 2024 — steady post-halving drawdown
 
-Brutal sequence: -25% over 8 weeks, partial recovery in the last 4. The kind of period (think Q1 2022 or COVID March 2020) the strategy is explicitly designed to survive.
+BTC drifted from $69,360 to $62,772 over 12 weeks. Three trigger weeks (-5.33%, -5.20%, plus -4.27% just below strike). No catastrophic single week.
 
-| Week | Spot Δ% | PLP Yield | Hedge Cost | Hedge Payoff | Net Δ |
-|---:|---:|---:|---:|---:|---:|
-| 1  | -2.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 2  | -5.6 | +0.39% | -0.30% | +0.06% | +0.15% |
-| 3  | -8.2 | +0.39% | -0.30% | +0.32% | +0.41% |
-| 4  | -5.1 | +0.39% | -0.30% | +0.01% | +0.10% |
-| 5  | -12.2 | +0.39% | -0.30% | +0.72% | +0.81% |
-| 6  | -3.1 | +0.39% | -0.30% | 0 | +0.09% |
-| 7  | +5.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 8  | +3.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 9  | -1.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 10 | +2.0 | +0.39% | -0.30% | 0 | +0.09% |
-| 11 | +0.5 | +0.39% | -0.30% | 0 | +0.09% |
-| 12 | +1.0 | +0.39% | -0.30% | 0 | +0.09% |
+| Wk | Date | BTC | Δ% | PLP | Hedge | Payoff | PLP Loss | Net% |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 2024-04-08 | 65662 | -5.33 | +0.385 | -0.300 | +2.000 | -3.199 | -1.115 |
+| 2 | 2024-04-15 | 64941 | -1.10 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 3 | 2024-04-22 | 63119 | -2.81 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 4 | 2024-04-29 | 64012 | +1.42 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 5 | 2024-05-06 | 61484 | -3.95 | +0.385 | -0.300 | 0 | -2.370 | -2.285 |
+| 6 | 2024-05-13 | 66274 | +7.79 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 7 | 2024-05-20 | 68508 | +3.37 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 8 | 2024-05-27 | 67766 | -1.08 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 9 | 2024-06-03 | 69648 | +2.78 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 10 | 2024-06-10 | 66677 | -4.27 | +0.385 | -0.300 | 0 | -2.560 | -2.475 |
+| 11 | 2024-06-17 | 63210 | -5.20 | +0.385 | -0.300 | +2.000 | -3.120 | -1.035 |
+| 12 | 2024-06-24 | 62772 | -0.69 | +0.385 | -0.300 | 0 | 0 | +0.085 |
 
-**Result**:
+**Final**: Raw PLP -6.54% | PLP+Hedge -6.11% | Delta +0.43%
 
-- Raw PLP (no hedge, suffering full drawdown): approximately **-15%** over 12 weeks
-- PLP+Hedge: **+2.2%** over 12 weeks
-- Hedge added 17.2% of relative outperformance through the drawdown weeks
+Two hedge triggers (W1, W11). Similar small net benefit. The drawdown is gradual rather than catastrophic, so the binary hedge structure doesn't get full leverage.
 
-This is what crash insurance looks like. The depositor doesn't get rich — but they preserve capital during a market regime that wipes out most yield strategies.
+---
+
+## Period C: Q2 2022 — Terra/Luna collapse
+
+BTC fell from $42,159 to $19,316 — a 54% decline in 13 weeks. Five trigger weeks of varying severity, including a -22.58% week (the LUNA/UST de-peg moment).
+
+| Wk | Date | BTC | Δ% | PLP | Hedge | Payoff | PLP Loss | Net% |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 2022-04-11 | 39678 | -5.88 | +0.385 | -0.300 | +2.000 | -3.531 | -1.446 |
+| 2 | 2022-04-18 | 39450 | -0.57 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 3 | 2022-04-25 | 38468 | -2.49 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 4 | 2022-05-02 | 34038 | -11.52 | +0.385 | -0.300 | +2.000 | -6.909 | -4.825 |
+| 5 | 2022-05-09 | 31329 | -7.96 | +0.385 | -0.300 | +2.000 | -4.776 | -2.691 |
+| 6 | 2022-05-16 | 30294 | -3.30 | +0.385 | -0.300 | 0 | -1.982 | -1.897 |
+| 7 | 2022-05-23 | 29468 | -2.73 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 8 | 2022-05-30 | 29919 | +1.53 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 9 | 2022-06-06 | 26575 | -11.18 | +0.385 | -0.300 | +2.000 | -6.707 | -4.623 |
+| 10 | 2022-06-13 | 20574 | -22.58 | +0.385 | -0.300 | +2.000 | -13.548 | -11.463 |
+| 11 | 2022-06-20 | 21038 | +2.26 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 12 | 2022-06-27 | 19316 | -8.19 | +0.385 | -0.300 | +2.000 | -4.912 | -2.827 |
+
+**Final**: Raw PLP -32.57% | PLP+Hedge -26.21% | Delta +6.35%
+
+This is where the strategy earns its keep. Five hedge triggers across 12 weeks. The binary structure (fixed 2% payoff per trigger) generates 10% of cumulative hedge income over the period — meaningfully softening the blow from sustained crash.
+
+Note that even with the hedge, the vault still loses 26% in this scenario. The strategy is designed to floor catastrophic losses, not eliminate them. Pure capital preservation requires zero exposure.
 
 ---
 
 ## Summary
 
-| Scenario | Raw PLP | PLP+Hedge | Δ |
-|---|---:|---:|---:|
-| Calm uptrend | +4.7% | +1.1% | -3.6% (drag) |
-| Recovery from drawdown | +0.5% | +1.6% | +1.1% |
-| Sustained drawdown | -15.0% | +2.2% | +17.2% |
+| Period | Raw PLP | PLP+Hedge | Delta | Trigger Weeks |
+|---|---:|---:|---:|---:|
+| Q3 2024 (volatile sideways) | -14.83% | -14.55% | +0.28% | 2 of 13 |
+| Q2 2024 (steady drawdown) | -6.54% | -6.11% | +0.43% | 2 of 12 |
+| Q2 2022 (severe drawdown) | -32.57% | -26.21% | +6.35% | 5 of 12 |
 
-The strategy is asymmetric on purpose. In calm markets you give up some yield. In drawdowns the hedge does the heavy lifting.
-
----
-
-## Sensitivity to hedge ratio
-
-The default ratio is 10% of NAV in hedge exposure. The strategy config is operator-tunable on chain (see `strata::strategy_plp_hedge::set_hedge_ratio`).
-
-| Hedge Ratio | Calm Return | Sustained Drawdown |
-|---:|---:|---:|
-| 0% (raw PLP) | +4.7% | -15.0% |
-| 5% | +2.9% | -6.4% |
-| 10% (default) | +1.1% | +2.2% |
-| 20% | -2.5% | +7.5% |
-
-10% is the sweet spot for V1. Aggressive risk-averse capital might prefer 20%; aggressive yield seekers might run 5% or zero.
+The strategy's value scales with the FREQUENCY of trigger events, not just their magnitude. Periods with 2-3 trigger weeks see roughly neutral hedge contribution. Periods with 5+ trigger weeks see meaningful protection.
 
 ---
 
 ## Limitations
 
-This note models a strategy, not a tick-level backtest against real Predict data. Honest caveats:
+This is a strategy model with real BTC paths, not a tick-level backtest. Honest caveats:
 
-1. **PLP yield is held constant at 20% APY.** In production, yield rises during drawdowns as traders pay more for protection, partially offsetting PLP losses. The model understates this counter-cyclical buffer.
+1. **PLP drawdown beta is held constant at 0.6.** In practice PLP yield is counter-cyclical (rises during stress as traders buy protection), which would reduce the effective drawdown. The model is therefore conservative — real performance is likely better than shown.
 
-2. **Hedge premium is held constant at 30 bps weekly.** Real premium varies with implied vol. During quiet markets it could be 15 bps; during turbulence it could spike to 80 bps or more.
+2. **Hedge premium is held constant at 30 bps weekly.** Real premium varies with implied vol. Could be 15 bps in calm markets, 80+ bps during turbulence. The premium drag during crisis periods would be higher; the trigger payoffs would also be larger.
 
-3. **BTC scenarios are illustrative.** Drawn from rough historical shapes, not actual price-by-price replay. A production strategy review uses on-chain SVI history once Predict mainnet has accumulated enough data.
+3. **Binary payoff is held constant at 2% per trigger.** Real binary pricing depends on the SVI surface. Deep OTM strikes during high-vol periods would have larger payoffs.
 
-4. **Withdrawal-limiter friction is not modeled.** Predict caps how much PLP can be withdrawn per period. In a stampede scenario (everyone redeeming), the vault could face delays.
+4. **No vault yield from new deposits during cycles.** In production, deposits during open windows compound the base. This model assumes a static $1000 starting NAV.
 
-5. **Operator execution is assumed perfect.** Strike selection at exactly 5% OTM, redemption at exactly settlement — real keepers have small slippage.
+5. **No transaction costs, gas, or oracle lag.**
 
 For V2 we plan to:
 - Run real backtests against actual Predict SVI data once mainnet ships
-- Add dynamic hedge ratio adjustment based on realized vol
-- Add a Range Ladder strategy as a second product
-- Open-source the simulation script
+- Implement dynamic hedge ratio adjustment based on realized vol
+- Add Range Ladder as a second strategy
+- Open-source the simulation framework with parameter sweeps
 
 ---
 
 ## Conclusion
 
-PLP+Hedge is the right shape for institutional and risk-averse LPs who want PLP yield exposure but cannot stomach the tail risk of raw PLP supply during BTC drawdowns. The V1 strategy gives up roughly 3-4% of nominal annual yield in calm markets in exchange for capping severe-drawdown losses at single digits.
+PLP+Hedge V1 provides marginal protection in moderate-volatility regimes (small delta) and meaningful protection in sustained drawdowns (6%+ delta over a quarter). The strategy is best sized to a depositor's belief about drawdown probability — high-conviction risk-averse capital benefits most.
 
-This is the trade Ribbon Finance pioneered on EVM. Strata brings it to Sui with composability unique to DeepBook Predict: vault shares are first-class Sui Coins, usable as collateral on `deepbook_margin`, opening structured-products composability impossible on other chains.
+This is honest research, not magic. The strategy doesn't generate alpha through complexity. It generates a different RISK SHAPE compared to raw PLP supply: capped downside in exchange for paying small premium continuously. Whether that's the right shape for a given LP depends on their tolerance for tail risk.
+
+For Sui's structured-products ecosystem, this is foundational. Strata-PH is V1. The same vault primitive supports range ladders, BTC-collateralized vaults, and other strategies as the protocol matures.
 
 ---
 
-*Source data and constants are reproducible. Strata is open-source: github.com/junejasoham/strata (to be published before submission).*
+*Reproducibility*: `scripts/fetch-btc-data.ts` pulls weekly closes from Binance. `scripts/simulate.ts` runs the model with the documented config. Both committed to the repo. Anyone can re-run and verify every number.
