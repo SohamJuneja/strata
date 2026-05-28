@@ -23,6 +23,7 @@ use deepbook_predict::oracle::OracleSVI;
 use deepbook_predict::plp::PLP;
 use deepbook_predict::predict::{Self, Predict};
 use deepbook_predict::predict_manager::{Self, PredictManager};
+use deepbook_predict::range_key::RangeKey;
 use strata::vault_share::{Self, ShareTreasury, VAULT_SHARE};
 
 public struct Vault<phantom T> has key {
@@ -112,6 +113,22 @@ public struct ManagerSwept has copy, drop {
     vault_id: ID,
     manager_id: ID,
     operator: address,
+    cash_returned: u64,
+}
+
+public struct RangeMinted has copy, drop {
+    vault_id: ID,
+    manager_id: ID,
+    operator: address,
+    quantity: u64,
+    cash_budget: u64,
+}
+
+public struct RangeRedeemed has copy, drop {
+    vault_id: ID,
+    manager_id: ID,
+    operator: address,
+    quantity: u64,
     cash_returned: u64,
 }
 
@@ -435,6 +452,85 @@ public fun sweep_manager_to_vault<T>(
         vault_id: object::id(vault),
         manager_id: object::id(manager),
         operator: ctx.sender(),
+        cash_returned,
+    });
+}
+
+/// Operator-only. Deposit cash into the linked PredictManager and mint
+/// a vertical range position via predict::mint_range. Mirrors buy_hedge
+/// but uses RangeKey instead of MarketKey. The manager's remaining
+/// balance is NOT swept back here; the operator calls
+/// sweep_manager_to_vault separately after all rungs are placed.
+public fun mint_range_position<T>(
+    vault: &mut Vault<T>,
+    predict: &mut Predict,
+    manager: &mut PredictManager,
+    oracle: &OracleSVI,
+    key: RangeKey,
+    quantity: u64,
+    cash_budget: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == vault.operator, E_NOT_OPERATOR);
+    assert!(option::is_some(&vault.predict_manager_id), E_MANAGER_NOT_SET);
+    let expected_manager_id = *option::borrow(&vault.predict_manager_id);
+    assert!(object::id(manager) == expected_manager_id, E_WRONG_MANAGER);
+
+    assert!(quantity > 0, E_ZERO_AMOUNT);
+    assert!(cash_budget > 0, E_ZERO_AMOUNT);
+    assert!(balance::value(&vault.cash) >= cash_budget, E_INSUFFICIENT_LIQUIDITY);
+
+    let cash_split = balance::split(&mut vault.cash, cash_budget);
+    let cash_coin = coin::from_balance(cash_split, ctx);
+    predict_manager::deposit(manager, cash_coin, ctx);
+
+    predict::mint_range<T>(predict, manager, oracle, key, quantity, clock, ctx);
+
+    event::emit(RangeMinted {
+        vault_id: object::id(vault),
+        manager_id: object::id(manager),
+        operator: ctx.sender(),
+        quantity,
+        cash_budget,
+    });
+}
+
+/// Operator-only. Redeem a vertical range position via predict::redeem_range
+/// and sweep the manager's full quote balance back to vault.cash. Mirrors
+/// redeem_hedge but uses RangeKey instead of MarketKey.
+public fun redeem_range_position<T>(
+    vault: &mut Vault<T>,
+    predict: &mut Predict,
+    manager: &mut PredictManager,
+    oracle: &OracleSVI,
+    key: RangeKey,
+    quantity: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == vault.operator, E_NOT_OPERATOR);
+    assert!(option::is_some(&vault.predict_manager_id), E_MANAGER_NOT_SET);
+    let expected_manager_id = *option::borrow(&vault.predict_manager_id);
+    assert!(object::id(manager) == expected_manager_id, E_WRONG_MANAGER);
+    assert!(quantity > 0, E_ZERO_AMOUNT);
+
+    predict::redeem_range<T>(predict, manager, oracle, key, quantity, clock, ctx);
+
+    let manager_balance = predict_manager::balance<T>(manager);
+    let cash_returned = if (manager_balance > 0) {
+        let cash_coin = predict_manager::withdraw<T>(manager, manager_balance, ctx);
+        balance::join(&mut vault.cash, coin::into_balance(cash_coin));
+        manager_balance
+    } else {
+        0
+    };
+
+    event::emit(RangeRedeemed {
+        vault_id: object::id(vault),
+        manager_id: object::id(manager),
+        operator: ctx.sender(),
+        quantity,
         cash_returned,
     });
 }
