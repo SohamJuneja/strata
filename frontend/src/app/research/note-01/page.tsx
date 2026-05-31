@@ -1,6 +1,7 @@
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Container } from "@/components/ui/Container";
+import { StrategySimulator } from "@/components/research/StrategySimulator";
 
 export default function ResearchNote01() {
   return (
@@ -36,6 +37,8 @@ export default function ResearchNote01() {
                 <h2 className="font-display text-3xl leading-snug tracking-tight text-ink mb-6">Strategy in one paragraph</h2>
                 <p className="text-lg leading-relaxed text-ink-secondary">The vault allocates approximately 90% of deposits to PLP (DeepBook Predict's LP token, earning premium from binary options traders) and approximately 10% to weekly out-of-the-money binary puts at 5% below spot. PLP captures yield from traders paying premium. The OTM puts pay out when BTC settles below strike, offsetting the PLP drawdown that occurs in the same scenarios. Net result: most of the PLP yield, with a defined floor on worst-case loss.</p>
               </div>
+
+              <StrategySimulator />
 
               <div>
                 <h2 className="font-display text-3xl leading-snug tracking-tight text-ink mb-6">Methodology</h2>
