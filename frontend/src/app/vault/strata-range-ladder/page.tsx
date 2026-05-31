@@ -1,7 +1,7 @@
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Container } from "@/components/ui/Container";
-import { VaultNAVHero, PositionStateRow } from "@/components/vault/LiveStats";
+import { VaultNAVHero, PositionStateRowStrategyNeutral, CycleStatusBadge } from "@/components/vault/LiveStats";
 import { DepositWithdrawCard } from "@/components/vault/DepositWithdrawCard";
 import { RangeLadderMechanism } from "@/components/vault/RangeLadderMechanism";
 
@@ -18,9 +18,12 @@ export default function RangeLadderPage() {
                 <h1 className="font-display text-6xl lg:text-7xl leading-tight tracking-tight text-ink">STRATA-RL</h1>
                 <span className="mt-3 inline-block font-mono text-xs uppercase tracking-widest border border-border px-3 py-1 text-ink-secondary">Strategy: Range Ladder</span>
                 <p className="mt-4 text-xl text-ink-secondary">Range Ladder strategy on dUSDC. Live on Sui testnet.</p>
-                <div className="mt-6 flex items-center gap-3">
-                  <span className="h-2 w-2 rounded-full bg-positive" />
-                  <span className="font-mono text-xs uppercase tracking-widest text-positive">Open for deposits</span>
+                <div className="mt-6 flex flex-wrap items-start gap-6">
+                  <div className="flex items-center gap-3">
+                    <span className="h-2 w-2 rounded-full bg-positive" />
+                    <span className="font-mono text-xs uppercase tracking-widest text-positive">Open for deposits</span>
+                  </div>
+                  <CycleStatusBadge strategyLabel="Range Ladder" />
                 </div>
               </div>
               <div className="lg:col-span-5 lg:text-right">
@@ -33,7 +36,7 @@ export default function RangeLadderPage() {
         <section className="border-b border-border bg-paper-raised py-12">
           <Container>
             <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-6">Position State</p>
-            <PositionStateRow />
+            <PositionStateRowStrategyNeutral />
           </Container>
         </section>
 

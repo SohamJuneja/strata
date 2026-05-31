@@ -51,6 +51,50 @@ export function PositionStateRow() {
   );
 }
 
+export function PositionStateRowStrategyNeutral() {
+  const { data: state } = useVaultState();
+  const cash = state ? `$${formatToken(state.cash, DUSDC_DECIMALS)}` : "—";
+  const deployed = state ? formatToken(state.plpBalance, SHARE_DECIMALS) : "—";
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div>
+        <p className="font-mono text-xs uppercase tracking-widest text-ink-muted">Cash</p>
+        <p className="mt-3 font-mono text-3xl tabular-nums text-ink">{cash}</p>
+        <p className="mt-2 font-mono text-xs text-ink-muted">undeployed dUSDC</p>
+      </div>
+      <div>
+        <p className="font-mono text-xs uppercase tracking-widest text-ink-muted">Deployed Capital</p>
+        <p className="mt-3 font-mono text-3xl tabular-nums text-ink">{deployed}</p>
+        <p className="mt-2 font-mono text-xs text-ink-muted">On Predict (PLP and/or ranges)</p>
+      </div>
+      <div>
+        <p className="font-mono text-xs uppercase tracking-widest text-ink-muted">Active Positions</p>
+        <p className="mt-3 font-mono text-3xl tabular-nums text-ink-muted">none</p>
+        <p className="mt-2 font-mono text-xs text-ink-muted">binaries or ranges from latest cycle</p>
+      </div>
+    </div>
+  );
+}
+
+// V2 reads on-chain position state directly; V1 infers from vault cash/PLP balance.
+export function CycleStatusBadge({ strategyLabel }: { strategyLabel: string }) {
+  const { data: state } = useVaultState();
+  let cycleStatus = "Idle";
+  if (state) {
+    if (state.plpBalance > 0n) {
+      cycleStatus = "PLP+Hedge active";
+    } else if (state.predictManagerId) {
+      cycleStatus = "Range Ladder active or settling";
+    }
+  }
+  return (
+    <div>
+      <p className="font-mono text-xs uppercase tracking-widest text-ink-muted">Strategy: {strategyLabel}</p>
+      <p className="mt-1 font-mono text-xs text-ink-secondary">Last cycle: {cycleStatus}</p>
+    </div>
+  );
+}
+
 export function HomepageStatsRow() {
   const { data: state } = useVaultState();
   const { data: supply } = useShareSupply();
