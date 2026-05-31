@@ -2,6 +2,7 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Container } from "@/components/ui/Container";
 import { VaultNAVHero, PositionStateRowStrategyNeutral, CycleStatusBadge } from "@/components/vault/LiveStats";
+import { OracleFeed } from "@/components/vault/OracleFeed";
 import { DepositWithdrawCard } from "@/components/vault/DepositWithdrawCard";
 import { RangeLadderMechanism } from "@/components/vault/RangeLadderMechanism";
 
@@ -30,6 +31,7 @@ export default function RangeLadderPage() {
                 <VaultNAVHero />
               </div>
             </div>
+            <OracleFeed className="mt-8" />
           </Container>
         </section>
 

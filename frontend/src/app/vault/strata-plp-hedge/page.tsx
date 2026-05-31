@@ -2,6 +2,7 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Container } from "@/components/ui/Container";
 import { VaultNAVHero, PositionStateRow, CycleStatusBadge } from "@/components/vault/LiveStats";
+import { OracleFeed } from "@/components/vault/OracleFeed";
 import { DepositWithdrawCard } from "@/components/vault/DepositWithdrawCard";
 import { MechanismDiagram } from "@/components/vault/MechanismDiagram";
 
@@ -30,6 +31,7 @@ export default function VaultDetailPage() {
                 <VaultNAVHero />
               </div>
             </div>
+            <OracleFeed className="mt-8" />
           </Container>
         </section>
 
