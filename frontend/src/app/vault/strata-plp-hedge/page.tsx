@@ -4,6 +4,7 @@ import { Container } from "@/components/ui/Container";
 import { VaultNAVHero, PositionStateRow, CycleStatusBadge } from "@/components/vault/LiveStats";
 import { OracleFeed } from "@/components/vault/OracleFeed";
 import { DepositWithdrawCard } from "@/components/vault/DepositWithdrawCard";
+import { SettleButton } from "@/components/vault/SettleButton";
 import { MechanismDiagram } from "@/components/vault/MechanismDiagram";
 
 export default function VaultDetailPage() {
@@ -47,6 +48,7 @@ export default function VaultDetailPage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16">
               <div className="lg:col-span-5">
                 <DepositWithdrawCard />
+                <SettleButton className="mb-8" />
               </div>
 
               <div className="lg:col-span-7">
