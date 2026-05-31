@@ -27,6 +27,21 @@ const PERIODS: Record<string, Period> = {
     start: "2022-04-01",
     end: "2022-06-30",
   },
+  preEtf: {
+    label: "Pre-ETF uptrend (Q4 2023)",
+    start: "2023-10-02",
+    end: "2023-12-25",
+  },
+  jpyFlash: {
+    label: "JPY carry unwind flash crash (Aug 2024)",
+    start: "2024-07-29",
+    end: "2024-09-16",
+  },
+  postElection: {
+    label: "Post-election rally and pullback (Q1 2025)",
+    start: "2025-01-06",
+    end: "2025-03-31",
+  },
 };
 
 async function fetchWeekly(start: string, end: string): Promise<PricePoint[]> {

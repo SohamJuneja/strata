@@ -131,6 +131,76 @@ Note that even with the hedge, the vault still loses 26% in this scenario. The s
 
 ---
 
+## Period D: Q4 2023 -- Pre-ETF uptrend
+
+BTC rallied from $27,917 to $42,284 -- a 51% gain in 12 weeks -- as ETF approval speculation gathered momentum. The market was mostly calm with only one significant weekly drawdown.
+
+| Wk | Date | BTC | Delta% | PLP | Hedge | Payoff | PLP Loss | Net% |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 2023-10-09 | 27154 | -2.73 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 2 | 2023-10-16 | 29992 | +10.45 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 3 | 2023-10-23 | 34526 | +15.12 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 4 | 2023-10-30 | 35012 | +1.41 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 5 | 2023-11-06 | 37064 | +5.86 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 6 | 2023-11-13 | 37360 | +0.80 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 7 | 2023-11-20 | 37447 | +0.23 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 8 | 2023-11-27 | 39972 | +6.74 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 9 | 2023-12-04 | 43790 | +9.55 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 10 | 2023-12-11 | 41375 | -5.51 | +0.385 | -0.300 | +2.000 | -3.309 | -1.224 |
+| 11 | 2023-12-18 | 42992 | +3.91 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 12 | 2023-12-25 | 42284 | -1.65 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+
+**Final**: Raw PLP +1.26% | PLP+Hedge -0.30% | Delta -1.56%
+
+The hedge is a net drag here. Raw PLP captures the full PLP yield across an uptrend with minimal drawdown. PLP+Hedge pays 0.30% premium every week for insurance that fires only once (W10). The one trigger (W10, -5.51%) barely offset the accumulated cost of 11 quiet weeks. This is the clearest case where the strategy underperforms raw PLP by a meaningful margin.
+
+---
+
+## Period E: Aug 2024 -- JPY carry unwind
+
+The JPY carry unwind in early August 2024 caused sharp intraday volatility across risk assets. On weekly closes, BTC declined then recovered over 7 weeks, starting at $58,161 (July 29 close) and finishing at $63,579.
+
+| Wk | Date | BTC | Delta% | PLP | Hedge | Payoff | PLP Loss | Net% |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 2024-08-05 | 58713 | +0.95 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 2 | 2024-08-12 | 58427 | -0.49 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 3 | 2024-08-19 | 64220 | +9.91 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 4 | 2024-08-26 | 57302 | -10.77 | +0.385 | -0.300 | +2.000 | -6.464 | -4.379 |
+| 5 | 2024-09-02 | 54870 | -4.24 | +0.385 | -0.300 | 0 | -2.546 | -2.462 |
+| 6 | 2024-09-09 | 59132 | +7.77 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 7 | 2024-09-16 | 63579 | +7.52 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+
+**Final**: Raw PLP -6.33% | PLP+Hedge -6.34% | Delta -0.01%
+
+Essentially zero difference. One hedge trigger (W4, -10.77%) almost exactly cancels the 7-week premium drag. Both strategies lose because PLP drawdown in W4 and W5 is large enough to swamp the yield. The period illustrates the middle case: hedge triggers but at a frequency too low to overcome premium accumulation.
+
+---
+
+## Period F: Q1 2025 -- Post-election rally and pullback
+
+BTC surged to new highs in January 2025 following the US election, reaching a weekly close peak of $102,620. It then pulled back steadily through March, closing the quarter at $78,430 -- a 17% decline from the period start at $94,545.
+
+| Wk | Date | BTC | Delta% | PLP | Hedge | Payoff | PLP Loss | Net% |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 2025-01-13 | 101332 | +7.18 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 2 | 2025-01-20 | 102620 | +1.27 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 3 | 2025-01-27 | 97701 | -4.79 | +0.385 | -0.300 | 0 | -2.876 | -2.792 |
+| 4 | 2025-02-03 | 96463 | -1.27 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 5 | 2025-02-10 | 96118 | -0.36 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 6 | 2025-02-17 | 96258 | +0.15 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 7 | 2025-02-24 | 94270 | -2.07 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 8 | 2025-03-03 | 80734 | -14.36 | +0.385 | -0.300 | +2.000 | -8.615 | -6.530 |
+| 9 | 2025-03-10 | 82575 | +2.28 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 10 | 2025-03-17 | 86083 | +4.25 | +0.385 | -0.300 | 0 | 0 | +0.085 |
+| 11 | 2025-03-24 | 82390 | -4.29 | +0.385 | -0.300 | 0 | -2.574 | -2.489 |
+| 12 | 2025-03-31 | 78430 | -4.81 | +0.385 | -0.300 | 0 | -2.884 | -2.799 |
+
+**Final**: Raw PLP -12.00% | PLP+Hedge -13.30% | Delta -1.29%
+
+A gradual selloff with only one large trigger (W8, -14.36%) is the worst pattern for this strategy. The hedge fires once and recovers 2% of NAV, but the quiet weeks before and after accumulate 3.3% of premium drag. The final weeks (W11, W12) both have 4-5% BTC drops -- below the 3% PLP-loss threshold but above the 5% hedge-trigger threshold -- generating PLP losses without hedge payoffs. Raw PLP outperforms by 1.29%.
+
+---
+
 ## Summary
 
 | Period | Raw PLP | PLP+Hedge | Delta | Trigger Weeks |
@@ -138,8 +208,11 @@ Note that even with the hedge, the vault still loses 26% in this scenario. The s
 | Q3 2024 (volatile sideways) | -14.83% | -14.55% | +0.28% | 2 of 13 |
 | Q2 2024 (steady drawdown) | -6.54% | -6.11% | +0.43% | 2 of 12 |
 | Q2 2022 (severe drawdown) | -32.57% | -26.21% | +6.35% | 5 of 12 |
+| Q4 2023 (pre-ETF uptrend) | +1.26% | -0.30% | -1.56% | 1 of 12 |
+| Aug 2024 (JPY flash crash) | -6.33% | -6.34% | -0.01% | 1 of 7 |
+| Q1 2025 (post-election pullback) | -12.00% | -13.30% | -1.29% | 1 of 12 |
 
-The strategy's value scales with the FREQUENCY of trigger events, not just their magnitude. Periods with 2-3 trigger weeks see roughly neutral hedge contribution. Periods with 5+ trigger weeks see meaningful protection.
+The strategy's value scales with the FREQUENCY of trigger events, not just their magnitude. Periods with 2-3 trigger weeks see roughly neutral hedge contribution. Periods with 5+ trigger weeks see meaningful protection. Periods with only 1 trigger in 12 weeks see the hedge as a net cost -- the premium drag (3.6% cumulative over 12 weeks) exceeds the single 2% payoff.
 
 ---
 
