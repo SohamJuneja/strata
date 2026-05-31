@@ -3,9 +3,9 @@ import { Footer } from "@/components/layout/Footer";
 import { Container } from "@/components/ui/Container";
 import { VaultNAVHero, PositionStateRow } from "@/components/vault/LiveStats";
 import { DepositWithdrawCard } from "@/components/vault/DepositWithdrawCard";
-import { MechanismDiagram } from "@/components/vault/MechanismDiagram";
+import { RangeLadderMechanism } from "@/components/vault/RangeLadderMechanism";
 
-export default function VaultDetailPage() {
+export default function RangeLadderPage() {
   return (
     <>
       <Header />
@@ -15,9 +15,9 @@ export default function VaultDetailPage() {
             <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-6">Vault / V1</p>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-end">
               <div className="lg:col-span-7">
-                <h1 className="font-display text-6xl lg:text-7xl leading-tight tracking-tight text-ink">STRATA-PH</h1>
-                <span className="mt-3 inline-block font-mono text-xs uppercase tracking-widest border border-border px-3 py-1 text-ink-secondary">Strategy: PLP+Hedge</span>
-                <p className="mt-4 text-xl text-ink-secondary">PLP+Hedge strategy on dUSDC. Live on Sui testnet.</p>
+                <h1 className="font-display text-6xl lg:text-7xl leading-tight tracking-tight text-ink">STRATA-RL</h1>
+                <span className="mt-3 inline-block font-mono text-xs uppercase tracking-widest border border-border px-3 py-1 text-ink-secondary">Strategy: Range Ladder</span>
+                <p className="mt-4 text-xl text-ink-secondary">Range Ladder strategy on dUSDC. Live on Sui testnet.</p>
                 <div className="mt-6 flex items-center gap-3">
                   <span className="h-2 w-2 rounded-full bg-positive" />
                   <span className="font-mono text-xs uppercase tracking-widest text-positive">Open for deposits</span>
@@ -46,14 +46,12 @@ export default function VaultDetailPage() {
 
               <div className="lg:col-span-7">
                 <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-6">The Strategy</p>
-                <h2 className="font-display text-4xl lg:text-5xl leading-tight tracking-tight text-ink mb-8">
-                  Two legs. <span className="italic text-accent">Yield from one,</span> protection from the other.
-                </h2>
+                <h2 className="font-display text-4xl lg:text-5xl leading-tight tracking-tight text-ink mb-8">Five bands. <span className="italic text-accent">One needs to settle.</span></h2>
                 <div className="space-y-6 text-lg leading-relaxed text-ink-secondary">
-                  <p>Strata-PH allocates your deposit across two complementary legs of DeepBook Predict.</p>
-                  <p><span className="font-mono text-sm uppercase tracking-widest text-ink">Yield leg.</span> The vault supplies dUSDC to the Predict liquidity vault. In return it receives PLP, which earns a proportional claim on the protocol vault as binary options traders pay premiums.</p>
-                  <p><span className="font-mono text-sm uppercase tracking-widest text-ink">Hedge leg.</span> A small fraction (10% by default) is used to buy out-of-the-money binary puts. These act as crash insurance. If BTC drops sharply, the hedge appreciates and offsets PLP drawdown.</p>
-                  <p>The result is most of the PLP yield with a defined floor on the worst-case loss. The trade-off is a small drag during calm markets when the hedge expires worthless.</p>
+                  <p>Strata-RL allocates deposits across a strip of vertical ranges around the current spot price. Each range pays $1 per unit if BTC settles within its band at expiry, $0 otherwise.</p>
+                  <p><span className="font-mono text-sm uppercase tracking-widest text-ink">Direction-neutral.</span> The strategy bets that BTC will land somewhere in the ladder regardless of direction. Yield comes from at least one range paying out. A move up or down of equal magnitude inside the ladder produces the same positive result.</p>
+                  <p><span className="font-mono text-sm uppercase tracking-widest text-ink">The trade-off.</span> Path dependence is the key risk. A sharp move that carries BTC outside all five rungs loses the entire premium. The strategy earns nothing if BTC gaps far in either direction.</p>
+                  <p>At each expiry, the keeper rolls the ladder to the new at-the-money price, re-centering all five rungs automatically.</p>
                 </div>
               </div>
             </div>
@@ -63,13 +61,9 @@ export default function VaultDetailPage() {
         <section className="border-b border-border py-16 lg:py-24">
           <Container>
             <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-6">The Mechanism</p>
-            <h2 className="font-display text-4xl lg:text-5xl leading-tight tracking-tight text-ink mb-4">
-              Money <span className="italic text-accent">flowing</span> through one cycle
-            </h2>
-            <p className="text-ink-secondary text-lg max-w-2xl mb-10">
-              Animated trace of how a single deposit moves through the vault, splits into PLP and hedge legs, and returns at settlement.
-            </p>
-            <MechanismDiagram />
+            <h2 className="font-display text-4xl lg:text-5xl leading-tight tracking-tight text-ink mb-4">Deposit split <span className="italic text-accent">across five rungs</span></h2>
+            <p className="text-ink-secondary text-lg max-w-2xl mb-10">Animated trace of how a deposit fans out into five range positions. The in-the-money rung pays back at settlement; expired rungs return nothing.</p>
+            <RangeLadderMechanism />
           </Container>
         </section>
 
@@ -78,17 +72,15 @@ export default function VaultDetailPage() {
             <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-8">Risk Profile</p>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
               <div className="lg:col-span-5">
-                <h2 className="font-display text-4xl lg:text-5xl leading-tight tracking-tight text-ink">
-                  What happens if BTC <span className="italic text-accent">moves?</span>
-                </h2>
-                <p className="mt-6 text-ink-secondary text-base">Indicative returns at expiry under different BTC price scenarios. Based on historical PLP yield and binary option payoffs. Actual results depend on oracle prices at each expiry.</p>
+                <h2 className="font-display text-4xl lg:text-5xl leading-tight tracking-tight text-ink">What if BTC <span className="italic text-accent">moves?</span></h2>
+                <p className="mt-6 text-ink-secondary text-base">Indicative returns at expiry under different BTC price scenarios. Range Ladder payoffs are symmetric: BTC -5% produces the same result as BTC +5%. Actual results depend on oracle prices and rung sizing at each expiry.</p>
               </div>
               <div className="lg:col-span-7 space-y-4">
-                <RiskRow label="BTC + 20%" value="+5.2%" tone="positive" note="Hedge expires worthless. Full PLP yield captured." />
-                <RiskRow label="BTC unchanged" value="+4.8%" tone="positive" note="PLP yield collected. Hedge expires unused." />
-                <RiskRow label="BTC - 10%" value="+2.1%" tone="positive" note="Mild drawdown. Hedge starts to kick in." />
-                <RiskRow label="BTC - 20%" value="-3.4%" tone="negative" note="Hedge offsets significant PLP loss." />
-                <RiskRow label="BTC - 30%" value="-8.0%" tone="negative" note="Worst case. Hedge floors the loss vs. ~ -18% unhedged." />
+                <RiskRow label="BTC unchanged" value="+3.8%" tone="positive" note="ATM rung settles in band. Full ladder cost recovered." />
+                <RiskRow label="BTC + 5%" value="+2.4%" tone="positive" note="Adjacent rung settles. Cheaper premium, same $1 payout." />
+                <RiskRow label="BTC + 10%" value="+0.9%" tone="positive" note="Edge rung barely settles. Thin margin on the premium paid." />
+                <RiskRow label="BTC + 20%" value="-4.5%" tone="negative" note="Outside all five rungs. Entire ladder premium lost." />
+                <RiskRow label="BTC + 30%" value="-4.5%" tone="negative" note="Deep outside ladder. Loss capped at premium paid." />
               </div>
             </div>
           </Container>

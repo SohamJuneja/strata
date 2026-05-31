@@ -38,22 +38,11 @@ export default function HomePage() {
 
         <section className="border-b border-border bg-paper-raised py-24">
           <Container>
-            <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-8">The Vault</p>
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-end">
-              <div className="lg:col-span-5">
-                <h2 className="font-display text-5xl lg:text-6xl leading-tight tracking-tight text-ink">STRATA-PH</h2>
-                <p className="mt-4 text-ink-secondary text-lg">PLP+Hedge strategy on dUSDC. Live on Sui testnet.</p>
-              </div>
-              <div className="lg:col-span-7">
-                <HomepageStatsRow />
-              </div>
-            </div>
-            <div className="mt-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 border-t border-border pt-8">
-              <div className="flex items-center gap-3">
-                <span className="h-2 w-2 rounded-full bg-positive" />
-                <span className="font-mono text-xs uppercase tracking-widest text-ink-secondary">Open for deposits</span>
-              </div>
-              <a href="/vault/strata-plp-hedge" className="inline-flex items-center bg-accent text-paper px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-widest hover:bg-accent-hover transition-colors">Deposit dUSDC</a>
+            <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-8">The Vaults</p>
+            <HomepageStatsRow />
+            <div className="mt-12 pt-8 border-t border-border grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <VaultCard name="STRATA-PH" tagline="PLP+Hedge strategy on dUSDC. Earn yield from binary options traders, hedged with crash insurance." href="/vault/strata-plp-hedge" />
+              <VaultCard name="STRATA-RL" tagline="Range Ladder strategy on dUSDC. Auto-allocates across five strike bands, direction-neutral." href="/vault/strata-range-ladder" />
             </div>
           </Container>
         </section>
@@ -84,6 +73,24 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div>
       <p className="font-mono text-xs uppercase tracking-widest text-ink-muted">{label}</p>
       <p className="mt-3 font-mono text-3xl lg:text-4xl tabular-nums text-ink">{value}</p>
+    </div>
+  );
+}
+
+function VaultCard({ name, tagline, href }: { name: string; tagline: string; href: string }) {
+  return (
+    <div className="border border-border bg-paper p-8 flex flex-col justify-between gap-8">
+      <div>
+        <h2 className="font-display text-4xl lg:text-5xl leading-tight tracking-tight text-ink">{name}</h2>
+        <p className="mt-3 text-ink-secondary text-base">{tagline}</p>
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="h-2 w-2 rounded-full bg-positive" />
+          <span className="font-mono text-xs uppercase tracking-widest text-ink-secondary">Open for deposits</span>
+        </div>
+        <a href={href} className="inline-flex items-center bg-accent text-paper px-6 py-3 font-mono text-sm font-semibold uppercase tracking-widest hover:bg-accent-hover transition-colors">Deposit</a>
+      </div>
     </div>
   );
 }
