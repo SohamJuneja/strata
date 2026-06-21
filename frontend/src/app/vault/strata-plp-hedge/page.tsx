@@ -36,6 +36,30 @@ export default function VaultDetailPage() {
           </Container>
         </section>
 
+        <section className="border-b border-border py-16 lg:py-24 bg-slate-950/60">
+          <Container>
+            <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-6">How it works</p>
+            <h2 className="font-display text-4xl lg:text-5xl leading-tight tracking-tight text-ink mb-10">A simple view of the vault flow</h2>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-[32px] border border-white/10 bg-[#090b11] p-6 shadow-sm">
+                <div className="font-mono text-sm uppercase tracking-widest text-[#00d4aa] mb-4">Step 1</div>
+                <div className="text-2xl font-semibold text-ink">💰 You deposit dUSDC</div>
+                <p className="mt-4 text-sm leading-6 text-ink-secondary">The vault mints VAULT_SHARE tokens to your wallet at the current price. These are real Sui Coins — use them as collateral anywhere.</p>
+              </div>
+              <div className="rounded-[32px] border border-white/10 bg-[#090b11] p-6 shadow-sm">
+                <div className="font-mono text-sm uppercase tracking-widest text-[#00d4aa] mb-4">Step 2</div>
+                <div className="text-2xl font-semibold text-ink">⚖️ Your money works in two places</div>
+                <p className="mt-4 text-sm leading-6 text-ink-secondary">90% supplies DeepBook Predict's liquidity pool, earning premium every 15 minutes as options settle. 10% buys a binary put option — crash insurance.</p>
+              </div>
+              <div className="rounded-[32px] border border-white/10 bg-[#090b11] p-6 shadow-sm">
+                <div className="font-mono text-sm uppercase tracking-widest text-[#00d4aa] mb-4">Step 3</div>
+                <div className="text-2xl font-semibold text-ink">🛡️ BTC crashes? You're protected</div>
+                <p className="mt-4 text-sm leading-6 text-ink-secondary">If BTC drops past the strike price, the hedge fires automatically and pays out into the vault. Every shareholder benefits pro-rata.</p>
+              </div>
+            </div>
+          </Container>
+        </section>
+
         <section className="border-b border-border bg-paper-raised py-12">
           <Container>
             <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-6">Position State</p>

@@ -36,6 +36,30 @@ export default function RangeLadderPage() {
           </Container>
         </section>
 
+        <section className="border-b border-border py-16 lg:py-24 bg-slate-950/60">
+          <Container>
+            <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-6">How it works</p>
+            <h2 className="font-display text-4xl lg:text-5xl leading-tight tracking-tight text-ink mb-10">A simple view of the vault flow</h2>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-[32px] border border-white/10 bg-[#090b11] p-6 shadow-sm">
+                <div className="font-mono text-sm uppercase tracking-widest text-[#00d4aa] mb-4">Step 1</div>
+                <div className="text-2xl font-semibold text-ink">💰 You deposit dUSDC</div>
+                <p className="mt-4 text-sm leading-6 text-ink-secondary">The vault mints VAULT_SHARE tokens at current NAV. Fully composable — stack them in margin or lending protocols.</p>
+              </div>
+              <div className="rounded-[32px] border border-white/10 bg-[#090b11] p-6 shadow-sm">
+                <div className="font-mono text-sm uppercase tracking-widest text-[#00d4aa] mb-4">Step 2</div>
+                <div className="text-2xl font-semibold text-ink">📊 Five range positions open around BTC</div>
+                <p className="mt-4 text-sm leading-6 text-ink-secondary">The vault places bets across five price bands around the current BTC price. No directional view needed — you win if BTC lands anywhere in the ladder.</p>
+              </div>
+              <div className="rounded-[32px] border border-white/10 bg-[#090b11] p-6 shadow-sm">
+                <div className="font-mono text-sm uppercase tracking-widest text-[#00d4aa] mb-4">Step 3</div>
+                <div className="text-2xl font-semibold text-ink">⏱️ Oracle settles, you earn</div>
+                <p className="mt-4 text-sm leading-6 text-ink-secondary">Every 15 minutes, DeepBook Predict's oracle settles. If BTC lands in any of your ranges, the payout flows back into the vault automatically.</p>
+              </div>
+            </div>
+          </Container>
+        </section>
+
         <section className="border-b border-border bg-paper-raised py-12">
           <Container>
             <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-6">Position State</p>
