@@ -324,6 +324,18 @@ async function getVaultCash(client: SuiClient, senderAddr: string): Promise<bigi
   }
 }
 
+async function getDepositWindowOpen(client: SuiClient, senderAddr: string): Promise<boolean> {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${STRATA_PACKAGE}::vault::deposit_window_open`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(VAULT_ID)],
+  });
+  const res = await client.devInspectTransactionBlock({ sender: senderAddr, transactionBlock: tx });
+  const bytes = res.results?.[0]?.returnValues?.[0]?.[0];
+  return bytes?.[0] === 1;
+}
+
 // Reads the live hedge_ratio_bps / hedge_strike_offset_bps off the on-chain
 // StrategyConfig so the bot stays in sync if the operator tunes them from
 // the frontend, rather than hardcoding the (currently matching) defaults.
@@ -991,53 +1003,64 @@ async function runCycle(
       await txCloseDepositWindow(client, operator);
       await sleep(2000);
 
-      const cashToDeploy = await getVaultCash(client, operatorAddr);
-      const { hedgeRatioBps, strikeOffsetBps: configStrikeOffsetBps } = await getStrategyConfig(client, operatorAddr);
-      const hedgeBudget = (cashToDeploy * hedgeRatioBps) / 10000n;
-      const plpAmount = cashToDeploy - hedgeBudget;
+      // Everything between close and open is wrapped in try/finally —
+      // if ANYTHING here throws (a devInspect blip, a bad oracle quote,
+      // whatever), the window must still reopen. Without this, an
+      // uncaught exception mid-cycle leaves deposit_window_open stuck
+      // false forever: the next cycle only re-closes/reopens when
+      // cash > 0, but cash is already drained from this cycle's deploy,
+      // so that recovery path never fires again on its own. Hit exactly
+      // this in production — had to manually reopen the window after a
+      // verification run got killed mid-cycle.
+      try {
+        const cashToDeploy = await getVaultCash(client, operatorAddr);
+        const { hedgeRatioBps, strikeOffsetBps: configStrikeOffsetBps } = await getStrategyConfig(client, operatorAddr);
+        const hedgeBudget = (cashToDeploy * hedgeRatioBps) / 10000n;
+        const plpAmount = cashToDeploy - hedgeBudget;
 
-      if (plpAmount > 0n) {
-        log(`Vault cash ${cashToDeploy} ≥ deploy threshold — deploying ${Number(plpAmount) / 1e6} dUSDC to PLP, reserving ${Number(hedgeBudget) / 1e6} dUSDC for hedge…`);
-        entry.deployedToPlp = await txDeployToPlp(client, operator, Number(plpAmount));
-        await sleep(2000);
-      }
+        if (plpAmount > 0n) {
+          log(`Vault cash ${cashToDeploy} ≥ deploy threshold — deploying ${Number(plpAmount) / 1e6} dUSDC to PLP, reserving ${Number(hedgeBudget) / 1e6} dUSDC for hedge…`);
+          entry.deployedToPlp = await txDeployToPlp(client, operator, Number(plpAmount));
+          await sleep(2000);
+        }
 
-      // The "H" in PLP+Hedge. Only runs right after a PLP deploy, mirroring
-      // the strategy thesis: each cycle that puts cash to work in PLP also
-      // buys crash insurance sized off the same NAV slice.
-      if (entry.deployedToPlp && hedgeBudget > 0n) {
-        const candidates = listLiveOracles(oracles);
-        if (candidates.length === 0) {
-          log('No live oracle available — skipping hedge mint this cycle.');
-        } else {
-          const strikeOffsetBps = HEDGE_STRIKE_OFFSET_OVERRIDE_BPS ?? configStrikeOffsetBps;
-          if (HEDGE_STRIKE_OFFSET_OVERRIDE_BPS !== null) {
-            log(`  ⚠️  TEMPORARY: strike offset overridden to ${HEDGE_STRIKE_OFFSET_OVERRIDE_BPS} bps (config says ${configStrikeOffsetBps}) to force a near-term settlement.`);
-          }
-          const quote = await findHedgeQuote(client, operatorAddr, candidates, strikeOffsetBps, hedgeBudget);
-          if (!quote) {
-            log('No oracle/strike combination priced a mintable OTM put this cycle — skipping.');
+        // The "H" in PLP+Hedge. Only runs right after a PLP deploy, mirroring
+        // the strategy thesis: each cycle that puts cash to work in PLP also
+        // buys crash insurance sized off the same NAV slice.
+        if (entry.deployedToPlp && hedgeBudget > 0n) {
+          const candidates = listLiveOracles(oracles);
+          if (candidates.length === 0) {
+            log('No live oracle available — skipping hedge mint this cycle.');
           } else {
-            const askPct = Number(quote.askPerUnit) / Number(FLOAT_SCALING) * 100;
-            // Ask price near 50% means the strike landed at-the-money (the offset
-            // search bottomed out, or an override forced it) rather than the
-            // intended deep-OTM hedge — worth flagging distinctly in the log.
-            const isAtm = askPct >= 40 && askPct <= 60;
-            log(`Buying put: oracle ${quote.oracle.oracle_id.slice(0, 18)}… strike ${quote.strike} (ask ${askPct.toFixed(2)}%, ${isAtm ? 'ATM' : 'OTM'}) qty ${quote.quantity} budget ${hedgeBudget}`);
-            entry.hedgeBoughtDigest = await txBuyHedge(client, operator, quote.oracle.oracle_id, quote.oracle.expiry, quote.strike, quote.quantity, hedgeBudget);
-            entry.hedgeStrike = Number(quote.strike) / Number(FLOAT_SCALING);
-            entry.hedgeAskPct = askPct;
-            entry.hedgeIsAtm = isAtm;
+            const strikeOffsetBps = HEDGE_STRIKE_OFFSET_OVERRIDE_BPS ?? configStrikeOffsetBps;
             if (HEDGE_STRIKE_OFFSET_OVERRIDE_BPS !== null) {
-              entry.testNote = 'Test settlement: ATM strike override';
+              log(`  ⚠️  TEMPORARY: strike offset overridden to ${HEDGE_STRIKE_OFFSET_OVERRIDE_BPS} bps (config says ${configStrikeOffsetBps}) to force a near-term settlement.`);
             }
-            await sleep(2000);
+            const quote = await findHedgeQuote(client, operatorAddr, candidates, strikeOffsetBps, hedgeBudget);
+            if (!quote) {
+              log('No oracle/strike combination priced a mintable OTM put this cycle — skipping.');
+            } else {
+              const askPct = Number(quote.askPerUnit) / Number(FLOAT_SCALING) * 100;
+              // Ask price near 50% means the strike landed at-the-money (the offset
+              // search bottomed out, or an override forced it) rather than the
+              // intended deep-OTM hedge — worth flagging distinctly in the log.
+              const isAtm = askPct >= 40 && askPct <= 60;
+              log(`Buying put: oracle ${quote.oracle.oracle_id.slice(0, 18)}… strike ${quote.strike} (ask ${askPct.toFixed(2)}%, ${isAtm ? 'ATM' : 'OTM'}) qty ${quote.quantity} budget ${hedgeBudget}`);
+              entry.hedgeBoughtDigest = await txBuyHedge(client, operator, quote.oracle.oracle_id, quote.oracle.expiry, quote.strike, quote.quantity, hedgeBudget);
+              entry.hedgeStrike = Number(quote.strike) / Number(FLOAT_SCALING);
+              entry.hedgeAskPct = askPct;
+              entry.hedgeIsAtm = isAtm;
+              if (HEDGE_STRIKE_OFFSET_OVERRIDE_BPS !== null) {
+                entry.testNote = 'Test settlement: ATM strike override';
+              }
+              await sleep(2000);
+            }
           }
         }
+      } finally {
+        await txOpenDepositWindow(client, operator);
+        await sleep(2000);
       }
-
-      await txOpenDepositWindow(client, operator);
-      await sleep(2000);
     } else {
       log(`Vault cash is 0 — nothing to deploy this cycle.`);
     }
@@ -1104,6 +1127,19 @@ async function main() {
 
   const lpWallets = loadOrCreateWallets();
   await ensureFunded(client, operator, lpWallets);
+
+  // Self-heal: if a previous run was killed mid-cycle (between closing
+  // and reopening the window — e.g. SIGKILL, which no try/finally can
+  // catch), deposit_window_open is stuck false with no other recovery
+  // path, since the cycle's own close/open logic only runs when
+  // cash > 0, and cash is already drained by the time this happens.
+  // Safe to force open here: startup is never itself mid-deploy.
+  const operatorAddr = operator.getPublicKey().toSuiAddress();
+  if (!(await getDepositWindowOpen(client, operatorAddr))) {
+    log('⚠️  Deposit window was left closed (likely an interrupted prior run) — reopening…');
+    await txOpenDepositWindow(client, operator);
+    await sleep(2000);
+  }
 
   const redeemedKeys = new Set<string>();
   let cycleNum = 1;
