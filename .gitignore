@@ -21,6 +21,7 @@ pnpm-debug.log*
 *.key
 *.pem
 sui.keystore
+lp-wallets.json
 
 # Editor
 .vscode/

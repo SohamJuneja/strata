@@ -1,0 +1,18 @@
+{
+  "name": "strata-marathon-bot",
+  "version": "1.0.0",
+  "description": "Continuous vault cycle bot for Strata — generates testnet transaction history",
+  "main": "index.ts",
+  "scripts": {
+    "start": "ts-node index.ts",
+    "start:fast": "CYCLE_INTERVAL_OVERRIDE=60000 ts-node index.ts"
+  },
+  "dependencies": {
+    "@mysten/sui": "^1.0.0"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}
