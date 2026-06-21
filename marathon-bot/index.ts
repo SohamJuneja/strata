@@ -47,7 +47,6 @@ const DEPOSIT_AMOUNT_MIST   = 5_000_000;   // 5 dUSDC (6 decimals)
 const LP_DUSDC_TARGET_MIST  = 30_000_000;  // top up each LP wallet to 30 dUSDC
 const LP_SUI_MIN_MIST       = 50_000_000n; // 0.05 SUI gas floor
 const OPERATOR_SUI_MIN_MIST = 100_000_000n; // 0.1 SUI gas floor
-const DEPLOY_TO_PLP_MIST    = 10_000_000;  // 10 dUSDC deployed to PLP per cycle when available
 const HEDGE_PROBE_QUANTITY  = 1_000_000;   // probe size used to read a per-unit price via get_trade_amounts
 const HEDGE_FALLBACK_RATIO_BPS  = 1000n;   // 10% of NAV in hedges — used only if the on-chain config read fails
 const HEDGE_FALLBACK_STRIKE_OFFSET_BPS = 500n; // 5% OTM — used only if the on-chain config read fails
@@ -78,6 +77,13 @@ interface CycleEntry {
   hedgeIsAtm:          boolean | null; // true if ask was ~40-60% (at-the-money), false if clearly OTM
   testNote:           string | null; // transparency label for anything forced for integration testing
   depositDigests:     string[];
+  // Deposits labeled STRATA-RL for activity-feed purposes. Strata-PH and
+  // Strata-RL share one Vault<DUSDC> object on chain (confirmed in
+  // CLAUDE.md and the vault/strategy_range_ladder source — there is no
+  // separate RL vault to deposit into), so this is the same vault::deposit
+  // call as depositDigests, just earmarked so the activity page can show
+  // both strategies generating deposit activity.
+  rlDepositDigests:   string[];
   totalTxThisSession: number;
   error:              string | null;
 }
@@ -127,7 +133,9 @@ function totalTxSoFar(): number {
   try {
     const entries: CycleEntry[] = JSON.parse(fs.readFileSync(LOG_PATH, 'utf-8'));
     return entries.reduce((acc, e) => (
-      acc + e.redeemedDigests.length + e.depositDigests.length +
+      // rlDepositDigests is a newer field — guard for older log entries
+      // written before it existed.
+      acc + e.redeemedDigests.length + e.depositDigests.length + (e.rlDepositDigests?.length ?? 0) +
       (e.deployedToPlp ? 1 : 0) + (e.hedgeBoughtDigest ? 1 : 0)
     ), 0);
   } catch { return 0; }
@@ -599,6 +607,70 @@ async function txDeposit(
   }
 }
 
+// Closes/reopens the deposit window around PLP deploys so vault.cash
+// reflects true NAV whenever deposit() runs — deposits are rejected
+// on-chain while the window is closed (E_DEPOSIT_WINDOW_CLOSED), so this
+// is what actually prevents the cash-only NAV approximation from being
+// computed against post-deploy cash. Both are operator-only on-chain
+// (vault.move asserts ctx.sender() == vault.operator). Each is wrapped so
+// a failure here logs and falls through rather than aborting the cycle —
+// see runCycle's outer try/catch for why that matters.
+async function txCloseDepositWindow(client: SuiClient, operator: Ed25519Keypair): Promise<boolean> {
+  try {
+    const tx = new Transaction();
+    tx.setSender(operator.getPublicKey().toSuiAddress());
+    tx.moveCall({
+      target: `${STRATA_PACKAGE}::vault::close_deposit_window`,
+      typeArguments: [DUSDC_TYPE],
+      arguments: [tx.object(VAULT_ID)],
+    });
+
+    const res = await client.signAndExecuteTransaction({
+      signer: operator,
+      transaction: tx,
+      options: { showEffects: true },
+    });
+
+    if (res.effects?.status?.status === 'success') {
+      log(`  🔒 Deposit window closed  tx: ${res.digest.slice(0, 22)}…`);
+      return true;
+    }
+    log(`  ❌ Close deposit window FAILED: ${JSON.stringify(res.effects?.status)}`);
+    return false;
+  } catch (e: any) {
+    log(`  ❌ Close deposit window error: ${e.message}`);
+    return false;
+  }
+}
+
+async function txOpenDepositWindow(client: SuiClient, operator: Ed25519Keypair): Promise<boolean> {
+  try {
+    const tx = new Transaction();
+    tx.setSender(operator.getPublicKey().toSuiAddress());
+    tx.moveCall({
+      target: `${STRATA_PACKAGE}::vault::open_deposit_window`,
+      typeArguments: [DUSDC_TYPE],
+      arguments: [tx.object(VAULT_ID)],
+    });
+
+    const res = await client.signAndExecuteTransaction({
+      signer: operator,
+      transaction: tx,
+      options: { showEffects: true },
+    });
+
+    if (res.effects?.status?.status === 'success') {
+      log(`  🔓 Deposit window reopened  tx: ${res.digest.slice(0, 22)}…`);
+      return true;
+    }
+    log(`  ❌ Open deposit window FAILED: ${JSON.stringify(res.effects?.status)}`);
+    return false;
+  } catch (e: any) {
+    log(`  ❌ Open deposit window error: ${e.message}`);
+    return false;
+  }
+}
+
 async function txDeployToPlp(
   client: SuiClient,
   operator: Ed25519Keypair,
@@ -764,23 +836,39 @@ function pick<T>(arr: T[], i: number): T {
 // INITIAL DEPOSIT PHASE
 // ============================================================
 
+interface InitialDeposits {
+  digests:   string[]; // STRATA-PH-labeled
+  rlDigests: string[]; // STRATA-RL-labeled (wallets 3-5 only, see below)
+}
+
 async function initialDepositPhase(
   client: SuiClient,
   lpWallets: Ed25519Keypair[]
-): Promise<string[]> {
+): Promise<InitialDeposits> {
   log('\n━━━ INITIAL DEPOSITS ━━━');
   const digests: string[] = [];
+  const rlDigests: string[] = [];
 
   for (let i = 0; i < lpWallets.length; i++) {
     const wallet = lpWallets[i];
-    log(`Wallet ${i + 1}/${lpWallets.length} depositing into vault…`);
+    log(`Wallet ${i + 1}/${lpWallets.length} depositing into vault… (STRATA-PH)`);
     const d = await txDeposit(client, wallet, DEPOSIT_AMOUNT_MIST);
     if (d) digests.push(d);
     await sleep(3000);
+
+    // Wallets 3-5 also seed STRATA-RL with a second deposit, so the
+    // activity feed shows both strategies live from cycle 0. Same
+    // vault::deposit call as above — see CycleEntry.rlDepositDigests.
+    if (i >= 2) {
+      log(`Wallet ${i + 1}/${lpWallets.length} depositing into vault… (STRATA-RL)`);
+      const rd = await txDeposit(client, wallet, DEPOSIT_AMOUNT_MIST);
+      if (rd) rlDigests.push(rd);
+      await sleep(3000);
+    }
   }
 
-  log(`Initial deposits done. ${digests.length} transactions.`);
-  return digests;
+  log(`Initial deposits done. ${digests.length} STRATA-PH + ${rlDigests.length} STRATA-RL transactions.`);
+  return { digests, rlDigests };
 }
 
 // ============================================================
@@ -810,6 +898,7 @@ async function runCycle(
     hedgeIsAtm:         null,
     testNote:           null,
     depositDigests:     [],
+    rlDepositDigests:   [],
     totalTxThisSession: totalTxSoFar(),
     error:              null,
   };
@@ -851,68 +940,106 @@ async function runCycle(
     }
 
     // ── 3. Staggered LP deposit (one wallet per cycle, round-robin) ─
+    // Every 3rd cycle the deposit is labeled STRATA-RL instead of
+    // STRATA-PH for the activity feed. Both strategies share the same
+    // Vault<DUSDC> object (see CycleEntry.rlDepositDigests) — this is
+    // the identical vault::deposit call, just earmarked differently.
     if (cycleNum > 1) { // skip cycle 1 (initial deposits already done)
       const wallet = pick(lpWallets, cycleNum);
-      log(`LP ${(cycleNum % lpWallets.length) + 1} depositing into vault…`);
+      const isRlCycle = cycleNum % 3 === 0;
+      const label = isRlCycle ? 'STRATA-RL' : 'STRATA-PH';
+      log(`LP ${(cycleNum % lpWallets.length) + 1} depositing into vault… (${label})`);
       const d = await txDeposit(client, wallet, DEPOSIT_AMOUNT_MIST);
-      if (d) entry.depositDigests.push(d);
+      if (d) {
+        if (isRlCycle) entry.rlDepositDigests.push(d);
+        else entry.depositDigests.push(d);
+      }
       await sleep(2000);
     }
 
-    // ── 4. Deploy idle cash to PLP ────────────────────────────
+    // ── 4-5. Deploy idle cash to PLP, then buy a hedge with a reserved
+    // slice of the same cash ──────────────────────────────────────────
+    // Window closes before any cash leaves the vault and stays closed
+    // until BOTH the PLP deploy and the hedge buy are done, so deposit()
+    // never prices new shares against partially-spent cash. Each window
+    // call is independently try/caught (see txCloseDepositWindow/
+    // txOpenDepositWindow) — a failure here logs and falls through
+    // rather than aborting the cycle.
+    //
+    // The hedge budget is reserved as a fraction of total cash BEFORE
+    // depositing to PLP, rather than re-reading whatever happens to be
+    // left over after a fixed-size deploy. That matters for the same
+    // reason the deploy amount does: vault::deposit()'s share price is
+    // amount_in * total_supply / cash, with a safe 1:1 fallback only
+    // when cash == 0. Deploying a fixed chunk and then spending some
+    // fraction of the remainder leaves a small nonzero cash dust either
+    // way, and every deposit against that dust mints disproportionately
+    // many shares — compounding cycle over cycle. Deploy + hedge buy
+    // together consuming ~all of current cash keeps landing on the safe
+    // 0 instead.
+    // No minimum threshold on the deploy trigger (just cash > 0) — this is
+    // what actually closes the gap. With a per-cycle deposit smaller than
+    // a fixed threshold, cash crosses the threshold only every other
+    // deposit, so every other deposit lands on a nonzero, growing cash
+    // balance and gets mispriced anyway. Confirmed on-chain: the very
+    // first fresh-vault test run hit exactly this, alternating clean
+    // (nav_before == 0) and inflated (nav_before == prior deposit's
+    // leftover cash) ratios every other deposit. Deploying anything
+    // nonzero, every cycle, removes the gap entirely.
     const cash = await getVaultCash(client, operatorAddr);
-    if (cash >= BigInt(DEPLOY_TO_PLP_MIST)) {
-      log(`Vault cash ${cash} ≥ deploy threshold — deploying ${DEPLOY_TO_PLP_MIST / 1e6} dUSDC to PLP…`);
-      entry.deployedToPlp = await txDeployToPlp(client, operator, DEPLOY_TO_PLP_MIST);
+    if (cash > 0n) {
+      await txCloseDepositWindow(client, operator);
       await sleep(2000);
-    } else {
-      log(`Vault cash ${cash} below deploy threshold (${DEPLOY_TO_PLP_MIST}) — skipping PLP deploy this cycle.`);
-    }
 
-    // ── 5. Mint a small OTM put hedge using a slice of vault cash ────
-    // The "H" in PLP+Hedge. Only runs right after a PLP deploy, mirroring
-    // the strategy thesis: each cycle that puts cash to work in PLP also
-    // buys crash insurance sized off the same NAV slice.
-    if (entry.deployedToPlp) {
-      const candidates = listLiveOracles(oracles);
-      if (candidates.length === 0) {
-        log('No live oracle available — skipping hedge mint this cycle.');
-      } else {
-        const cashAfterDeploy = await getVaultCash(client, operatorAddr);
-        if (cashAfterDeploy <= 0n) {
-          log('No vault cash left after PLP deploy — skipping hedge mint this cycle.');
+      const cashToDeploy = await getVaultCash(client, operatorAddr);
+      const { hedgeRatioBps, strikeOffsetBps: configStrikeOffsetBps } = await getStrategyConfig(client, operatorAddr);
+      const hedgeBudget = (cashToDeploy * hedgeRatioBps) / 10000n;
+      const plpAmount = cashToDeploy - hedgeBudget;
+
+      if (plpAmount > 0n) {
+        log(`Vault cash ${cashToDeploy} ≥ deploy threshold — deploying ${Number(plpAmount) / 1e6} dUSDC to PLP, reserving ${Number(hedgeBudget) / 1e6} dUSDC for hedge…`);
+        entry.deployedToPlp = await txDeployToPlp(client, operator, Number(plpAmount));
+        await sleep(2000);
+      }
+
+      // The "H" in PLP+Hedge. Only runs right after a PLP deploy, mirroring
+      // the strategy thesis: each cycle that puts cash to work in PLP also
+      // buys crash insurance sized off the same NAV slice.
+      if (entry.deployedToPlp && hedgeBudget > 0n) {
+        const candidates = listLiveOracles(oracles);
+        if (candidates.length === 0) {
+          log('No live oracle available — skipping hedge mint this cycle.');
         } else {
-          const { hedgeRatioBps, strikeOffsetBps: configStrikeOffsetBps } = await getStrategyConfig(client, operatorAddr);
           const strikeOffsetBps = HEDGE_STRIKE_OFFSET_OVERRIDE_BPS ?? configStrikeOffsetBps;
           if (HEDGE_STRIKE_OFFSET_OVERRIDE_BPS !== null) {
             log(`  ⚠️  TEMPORARY: strike offset overridden to ${HEDGE_STRIKE_OFFSET_OVERRIDE_BPS} bps (config says ${configStrikeOffsetBps}) to force a near-term settlement.`);
           }
-          const hedgeBudget = (cashAfterDeploy * hedgeRatioBps) / 10000n;
-          if (hedgeBudget <= 0n) {
-            log('Hedge budget rounds to zero — skipping hedge mint this cycle.');
+          const quote = await findHedgeQuote(client, operatorAddr, candidates, strikeOffsetBps, hedgeBudget);
+          if (!quote) {
+            log('No oracle/strike combination priced a mintable OTM put this cycle — skipping.');
           } else {
-            const quote = await findHedgeQuote(client, operatorAddr, candidates, strikeOffsetBps, hedgeBudget);
-            if (!quote) {
-              log('No oracle/strike combination priced a mintable OTM put this cycle — skipping.');
-            } else {
-              const askPct = Number(quote.askPerUnit) / Number(FLOAT_SCALING) * 100;
-              // Ask price near 50% means the strike landed at-the-money (the offset
-              // search bottomed out, or an override forced it) rather than the
-              // intended deep-OTM hedge — worth flagging distinctly in the log.
-              const isAtm = askPct >= 40 && askPct <= 60;
-              log(`Buying put: oracle ${quote.oracle.oracle_id.slice(0, 18)}… strike ${quote.strike} (ask ${askPct.toFixed(2)}%, ${isAtm ? 'ATM' : 'OTM'}) qty ${quote.quantity} budget ${hedgeBudget}`);
-              entry.hedgeBoughtDigest = await txBuyHedge(client, operator, quote.oracle.oracle_id, quote.oracle.expiry, quote.strike, quote.quantity, hedgeBudget);
-              entry.hedgeStrike = Number(quote.strike) / Number(FLOAT_SCALING);
-              entry.hedgeAskPct = askPct;
-              entry.hedgeIsAtm = isAtm;
-              if (HEDGE_STRIKE_OFFSET_OVERRIDE_BPS !== null) {
-                entry.testNote = 'Test settlement: ATM strike override';
-              }
-              await sleep(2000);
+            const askPct = Number(quote.askPerUnit) / Number(FLOAT_SCALING) * 100;
+            // Ask price near 50% means the strike landed at-the-money (the offset
+            // search bottomed out, or an override forced it) rather than the
+            // intended deep-OTM hedge — worth flagging distinctly in the log.
+            const isAtm = askPct >= 40 && askPct <= 60;
+            log(`Buying put: oracle ${quote.oracle.oracle_id.slice(0, 18)}… strike ${quote.strike} (ask ${askPct.toFixed(2)}%, ${isAtm ? 'ATM' : 'OTM'}) qty ${quote.quantity} budget ${hedgeBudget}`);
+            entry.hedgeBoughtDigest = await txBuyHedge(client, operator, quote.oracle.oracle_id, quote.oracle.expiry, quote.strike, quote.quantity, hedgeBudget);
+            entry.hedgeStrike = Number(quote.strike) / Number(FLOAT_SCALING);
+            entry.hedgeAskPct = askPct;
+            entry.hedgeIsAtm = isAtm;
+            if (HEDGE_STRIKE_OFFSET_OVERRIDE_BPS !== null) {
+              entry.testNote = 'Test settlement: ATM strike override';
             }
+            await sleep(2000);
           }
         }
       }
+
+      await txOpenDepositWindow(client, operator);
+      await sleep(2000);
+    } else {
+      log(`Vault cash is 0 — nothing to deploy this cycle.`);
     }
 
   } catch (e: any) {
@@ -923,18 +1050,20 @@ async function runCycle(
   entry.totalTxThisSession = totalTxSoFar() +
     entry.redeemedDigests.length +
     entry.depositDigests.length +
+    entry.rlDepositDigests.length +
     (entry.deployedToPlp ? 1 : 0) +
     (entry.hedgeBoughtDigest ? 1 : 0);
 
   appendCycleLog(entry);
 
   const txThisCycle =
-    entry.redeemedDigests.length + entry.depositDigests.length +
+    entry.redeemedDigests.length + entry.depositDigests.length + entry.rlDepositDigests.length +
     (entry.deployedToPlp ? 1 : 0) + (entry.hedgeBoughtDigest ? 1 : 0);
 
   log(`Cycle ${cycleNum} done | txs this cycle: ${txThisCycle} | total so far: ${entry.totalTxThisSession}`);
   if (entry.hedgeTriggered) log('  🚨 HEDGE SETTLED — positions redeemed');
   if (entry.hedgeBoughtDigest) log('  🛡️  HEDGE BOUGHT — OTM put minted');
+  if (entry.rlDepositDigests.length > 0) log('  📊 STRATA-RL deposit recorded');
 
   return entry;
 }
@@ -982,7 +1111,7 @@ async function main() {
   // Initial deposits on first run
   const isFirstRun = !fs.existsSync(LOG_PATH);
   if (isFirstRun) {
-    const digests = await initialDepositPhase(client, lpWallets);
+    const { digests, rlDigests } = await initialDepositPhase(client, lpWallets);
     appendCycleLog({
       cycleNumber:        0,
       timestamp:          ts(),
@@ -997,7 +1126,8 @@ async function main() {
       hedgeIsAtm:         null,
       testNote:           null,
       depositDigests:     digests,
-      totalTxThisSession: digests.length,
+      rlDepositDigests:   rlDigests,
+      totalTxThisSession: digests.length + rlDigests.length,
       error:              null,
     });
   }
