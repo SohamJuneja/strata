@@ -32,7 +32,8 @@ export default function CreateVaultPage() {
   const [strategy, setStrategy] = useState<StrategyConfig | null>(null);
   const [deploying, setDeploying] = useState(false);
 
-  const [result, setResult] = useState<{ slug: string; vaultId: string } | null>(null);
+  const [result, setResult] = useState<{ vaultIndex: number; txDigest: string } | null>(null);
+  const [deployError, setDeployError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   async function sendMessage() {
@@ -71,15 +72,26 @@ export default function CreateVaultPage() {
   async function launchVault() {
     if (!strategy || !account || deploying) return;
     setDeploying(true);
+    setDeployError(null);
     try {
       const res = await fetch("/api/create-vault/deploy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ strategy, creatorAddress: account.address }),
       });
-      const data = (await res.json()) as { slug: string; vaultId: string };
-      setResult(data);
+      const data = (await res.json()) as
+        | { vaultIndex: number; txDigest: string; slug: string; suiscanUrl: string }
+        | { vaultIndex: null; txDigest: null; slug: string; fallback: true; error: string };
+
+      if (!res.ok || data.vaultIndex === null) {
+        setDeployError("error" in data ? data.error : "Launch failed — nothing was registered on-chain.");
+        return;
+      }
+
+      setResult({ vaultIndex: data.vaultIndex, txDigest: data.txDigest });
       setStep("success");
+    } catch (e) {
+      setDeployError(e instanceof Error ? e.message : "Launch failed — could not reach the server.");
     } finally {
       setDeploying(false);
     }
@@ -87,7 +99,7 @@ export default function CreateVaultPage() {
 
   function copyShareLink() {
     if (!result) return;
-    const url = `${window.location.origin}/vault/community/${result.slug}`;
+    const url = `${window.location.origin}/vault/community/${result.vaultIndex}`;
     navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -112,6 +124,7 @@ export default function CreateVaultPage() {
             strategy={strategy}
             hasWallet={!!account}
             deploying={deploying}
+            error={deployError}
             onBack={() => setStep("chat")}
             onLaunch={launchVault}
           />
@@ -120,8 +133,8 @@ export default function CreateVaultPage() {
         {step === "success" && strategy && result && (
           <SuccessStep
             strategy={strategy}
-            slug={result.slug}
-            vaultId={result.vaultId}
+            vaultIndex={result.vaultIndex}
+            txDigest={result.txDigest}
             copied={copied}
             onCopy={copyShareLink}
           />
@@ -213,12 +226,14 @@ function PreviewStep({
   strategy,
   hasWallet,
   deploying,
+  error,
   onBack,
   onLaunch,
 }: {
   strategy: StrategyConfig;
   hasWallet: boolean;
   deploying: boolean;
+  error: string | null;
   onBack: () => void;
   onLaunch: () => void;
 }) {
@@ -258,6 +273,12 @@ function PreviewStep({
             all deposits to this vault.
           </p>
 
+          {error && (
+            <p className="mt-6 border border-negative bg-negative/10 px-4 py-3 text-sm text-negative">
+              {error}
+            </p>
+          )}
+
           <div className="mt-10 flex flex-wrap gap-4">
             <button
               type="button"
@@ -295,14 +316,14 @@ function ParamRow({ icon, label, value }: { icon: string; label: string; value: 
 
 function SuccessStep({
   strategy,
-  slug,
-  vaultId,
+  vaultIndex,
+  txDigest,
   copied,
   onCopy,
 }: {
   strategy: StrategyConfig;
-  slug: string;
-  vaultId: string;
+  vaultIndex: number;
+  txDigest: string;
   copied: boolean;
   onCopy: () => void;
 }) {
@@ -337,8 +358,16 @@ function SuccessStep({
           <p className="mt-6 font-display text-2xl italic text-ink">{strategy.name}</p>
           <p className="mt-3 text-ink-secondary leading-relaxed">{strategy.description}</p>
 
-          <p className="mt-8 font-mono text-xs uppercase tracking-widest text-ink-muted">Vault ID</p>
-          <p className="mt-2 font-mono text-sm text-ink break-all">{vaultId}</p>
+          <p className="mt-8 font-mono text-xs uppercase tracking-widest text-ink-muted">Registry Index</p>
+          <p className="mt-2 font-mono text-sm text-ink break-all">#{vaultIndex}</p>
+          <a
+            href={`https://suiscan.xyz/testnet/tx/${txDigest}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-block font-mono text-xs text-accent underline hover:text-accent-hover"
+          >
+            View transaction on Suiscan
+          </a>
 
           <div className="mt-10 flex flex-wrap justify-center gap-4">
             <button
@@ -349,7 +378,7 @@ function SuccessStep({
               {copied ? "Copied!" : "Share your vault"}
             </button>
             <a
-              href={`/vault/community/${slug}`}
+              href={`/vault/community/${vaultIndex}`}
               className="inline-flex items-center bg-accent text-paper px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-widest hover:bg-accent-hover transition-colors"
             >
               View My Vault →
@@ -357,7 +386,7 @@ function SuccessStep({
           </div>
 
           <p className="mt-8 text-xs text-ink-muted">
-            On-chain deployment is processing. Your vault will appear in the community directory shortly.
+            Registered on-chain in strata::vault_factory — visible to everyone in the community directory now.
           </p>
         </div>
       </Container>

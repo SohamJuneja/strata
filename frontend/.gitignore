@@ -37,6 +37,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local-only debug artifact from /api/create-vault/deploy — the on-chain
+# VaultRegistry is the real source of truth (see /api/community-vaults)
+community-vaults.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

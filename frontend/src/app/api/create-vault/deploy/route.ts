@@ -7,11 +7,14 @@ import { STRATA_PACKAGE, VAULT_REGISTRY_ID, SUI_CLOCK_OBJECT_ID } from "@/lib/co
 import type { CommunityVaultEntry, RiskLevel, StrategyConfig } from "@/lib/vaultCreator";
 
 // Layer 2: deployment only, no AI logic. Registers the strategy on-chain
-// via strata::vault_factory::register_vault, then mirrors the result into
-// community-vaults.json as a backup/read model for the frontend. If the
-// on-chain call fails for any reason, falls back to a JSON-only entry so
-// the user doesn't lose their configured strategy — see Layer 1 in
-// /api/create-vault/chat for why these two layers stay separate.
+// via strata::vault_factory::register_vault — that's the only durable
+// source of truth (see /api/community-vaults, which reads it back via
+// VaultRegistered events). community-vaults.json below is a best-effort
+// local debug artifact only: Vercel's serverless filesystem is read-only,
+// so this write always fails in production. It must never affect the
+// response — a previous version let a failed write here crash the whole
+// request even after a successful on-chain registration, producing a
+// bare 500 while real vaults kept getting created on-chain underneath.
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +46,17 @@ async function readVaults(): Promise<CommunityVaultEntry[]> {
   }
 }
 
-async function appendVault(entry: CommunityVaultEntry): Promise<void> {
-  const vaults = await readVaults();
-  vaults.push(entry);
-  await fs.writeFile(VAULTS_PATH, JSON.stringify(vaults, null, 2));
+// Best-effort only — never throws. Local dev gets a nice debug copy on
+// disk; production silently skips it (read-only filesystem).
+async function appendVaultBestEffort(entry: CommunityVaultEntry): Promise<void> {
+  try {
+    const vaults = await readVaults();
+    vaults.push(entry);
+    await fs.writeFile(VAULTS_PATH, JSON.stringify(vaults, null, 2));
+  } catch {
+    // Expected in production (Vercel's filesystem is read-only). The
+    // on-chain registration is the real source of truth either way.
+  }
 }
 
 function toUtf8Bytes(value: string): number[] {
@@ -113,7 +123,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const { vaultIndex, txDigest } = await registerVaultOnChain(strategy);
 
-    await appendVault({
+    await appendVaultBestEffort({
       ...strategy,
       creatorAddress,
       createdAt,
@@ -133,7 +143,7 @@ export async function POST(request: Request): Promise<Response> {
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unknown error";
 
-    await appendVault({
+    await appendVaultBestEffort({
       ...strategy,
       creatorAddress,
       createdAt,
@@ -144,12 +154,19 @@ export async function POST(request: Request): Promise<Response> {
       status: "pending",
     });
 
-    return Response.json({
-      vaultIndex: null,
-      txDigest: null,
-      slug,
-      fallback: true,
-      error: message,
-    });
+    // No on-chain registration happened, so this vault genuinely isn't
+    // visible anywhere (community-vaults.json is local-only/best-effort —
+    // see above). Returning 200 here would tell the frontend to show a
+    // success screen for a vault nobody can ever see. Fail loudly instead.
+    return Response.json(
+      {
+        vaultIndex: null,
+        txDigest: null,
+        slug,
+        fallback: true,
+        error: message,
+      },
+      { status: 502 }
+    );
   }
 }

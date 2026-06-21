@@ -14,6 +14,7 @@ export function Header() {
           <Link href="/activity" className="text-sm text-ink-secondary hover:text-ink transition-colors">Activity</Link>
           <Link href="/volatility" className="text-sm text-ink-secondary hover:text-ink transition-colors">Volatility</Link>
           <Link href="#thesis" className="text-sm text-ink-secondary hover:text-ink transition-colors">Thesis</Link>
+          <Link href="/vaults" className="text-sm text-ink-secondary hover:text-ink transition-colors">Community</Link>
           <Link href="/create-vault" className="text-sm text-accent hover:text-accent-hover transition-colors">Create Vault</Link>
           <ConnectWalletButton />
         </nav>

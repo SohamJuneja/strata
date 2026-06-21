@@ -1,12 +1,12 @@
-import { promises as fs } from "fs";
-import path from "path";
+"use client";
+
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Container } from "@/components/ui/Container";
-import type { CommunityVaultEntry, RiskLevel } from "@/lib/vaultCreator";
-
-const VAULTS_PATH = path.join(process.cwd(), "community-vaults.json");
+import type { CommunityVaultDetail } from "@/lib/communityVaults";
+import type { RiskLevel } from "@/lib/vaultCreator";
 
 const RISK_STYLES: Record<RiskLevel, string> = {
   LOW: "text-positive border-positive",
@@ -14,25 +14,61 @@ const RISK_STYLES: Record<RiskLevel, string> = {
   HIGH: "text-negative border-negative",
 };
 
-async function getVault(slug: string): Promise<CommunityVaultEntry | null> {
-  try {
-    const raw = await fs.readFile(VAULTS_PATH, "utf-8");
-    const vaults = JSON.parse(raw) as CommunityVaultEntry[];
-    return vaults.find((v) => v.slug === slug) ?? null;
-  } catch {
-    return null;
+export default function CommunityVaultPage({ params }: { params: Promise<{ index: string }> }) {
+  const { index } = use(params);
+
+  const [vault, setVault] = useState<CommunityVaultDetail | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const res = await fetch(`/api/community-vaults/${index}`);
+        const data = (await res.json()) as { vault: CommunityVaultDetail | null; error?: string };
+        if (cancelled) return;
+
+        if (res.status === 404 || !data.vault) {
+          setNotFound(true);
+        } else {
+          setVault(data.vault);
+          setError(data.error ?? null);
+        }
+        setIsLoading(false);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Failed to load vault");
+          setIsLoading(false);
+        }
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [index]);
+
+  if (isLoading) {
+    return (
+      <>
+        <Header />
+        <main>
+          <section className="py-32">
+            <Container>
+              <p className="font-mono text-sm text-ink-muted">Loading vault…</p>
+            </Container>
+          </section>
+        </main>
+        <Footer />
+      </>
+    );
   }
-}
 
-export default async function CommunityVaultPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const { slug } = await params;
-  const vault = await getVault(slug);
-
-  if (!vault) {
+  if (notFound || !vault) {
     return (
       <>
         <Header />
@@ -42,8 +78,9 @@ export default async function CommunityVaultPage({
               <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-6">Community Vault</p>
               <h1 className="font-display text-5xl text-ink">Vault not found</h1>
               <p className="mt-4 text-ink-secondary">
-                This vault doesn&apos;t exist yet, or hasn&apos;t finished deploying.
+                No vault is registered at index #{index} on strata::vault_factory.
               </p>
+              {error && <p className="mt-2 font-mono text-xs text-negative">{error}</p>}
               <Link
                 href="/create-vault"
                 className="mt-8 inline-flex items-center bg-accent text-paper px-7 py-3.5 font-mono text-sm font-semibold uppercase tracking-widest hover:bg-accent-hover transition-colors"
@@ -82,17 +119,15 @@ export default async function CommunityVaultPage({
               <span className="font-mono text-xs uppercase tracking-widest text-ink-muted">
                 Created by {shortAddr}
               </span>
-              {vault.txDigest && (
-                <a
-                  href={`https://suiscan.xyz/testnet/tx/${vault.txDigest}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-widest border border-positive text-positive px-3 py-1 hover:bg-positive/10 transition-colors"
-                >
-                  <span className="h-1.5 w-1.5 rounded-full bg-positive" />
-                  Verified on-chain
-                </a>
-              )}
+              <a
+                href={`https://suiscan.xyz/testnet/tx/${vault.txDigest}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-widest border border-positive text-positive px-3 py-1 hover:bg-positive/10 transition-colors"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-positive" />
+                Verified on-chain
+              </a>
             </div>
             <p className="mt-6 text-xl italic text-ink-secondary max-w-2xl">{vault.description}</p>
           </Container>
@@ -104,7 +139,7 @@ export default async function CommunityVaultPage({
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
               <ParamStat label="Hedge ratio" value={`${vault.hedgeRatioBps / 100}%`} />
               <ParamStat label="Hedge strike offset" value={`${vault.strikeOffsetBps / 100}% OTM`} />
-              <ParamStat label="Est. weekly yield" value={`${vault.estimatedWeeklyYieldPct}%`} />
+              <ParamStat label="Deploy ratio (PLP)" value={`${vault.deployRatioBps / 100}%`} />
               <ParamStat label="Creator fee" value={`${vault.creatorFeeBps / 100}%`} />
             </div>
           </Container>
@@ -118,7 +153,7 @@ export default async function CommunityVaultPage({
                   <p className="font-mono text-xs uppercase tracking-widest text-ink-muted mb-6">Deposit</p>
                   <div className="border border-dashed border-border bg-paper-sunken p-4 mb-4">
                     <p className="text-sm text-ink-secondary">
-                      ⏳ This vault is pending on-chain deployment — deposits open soon.
+                      ⏳ This vault is registered on-chain — capital deployment opens soon.
                     </p>
                   </div>
                   <input
@@ -136,13 +171,7 @@ export default async function CommunityVaultPage({
                     {vault.creatorFeeBps / 100}% of deposits go to the vault creator.
                   </p>
                 </div>
-                {vault.vaultIndex !== null ? (
-                  <p className="mt-4 font-mono text-xs text-ink-muted break-all">
-                    Registry Index: #{vault.vaultIndex}
-                  </p>
-                ) : (
-                  <p className="mt-4 font-mono text-xs text-ink-muted break-all">Vault ID: {vault.vaultId}</p>
-                )}
+                <p className="mt-4 font-mono text-xs text-ink-muted break-all">Registry Index: #{vault.vaultIndex}</p>
               </div>
 
               <div className="lg:col-span-7">
