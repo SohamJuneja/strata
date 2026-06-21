@@ -18,6 +18,7 @@ interface CycleEntry {
   hedgeIsAtm: boolean | null;
   testNote: string | null;
   depositDigests: string[];
+  rlDepositDigests: string[];
   totalTxThisSession: number;
   error: string | null;
 }
@@ -157,12 +158,18 @@ export default function ActivityPage() {
                     </div>
                   </div>
 
-                  {(cycle.depositDigests.length > 0 || cycle.redeemedDigests.length > 0 || cycle.hedgeBoughtDigest) && (
+                  {(cycle.depositDigests.length > 0 || (cycle.rlDepositDigests?.length ?? 0) > 0 || cycle.redeemedDigests.length > 0 || cycle.hedgeBoughtDigest) && (
                     <div className="flex flex-wrap gap-x-8 gap-y-2 pt-3 border-t border-border">
                       {cycle.depositDigests.length > 0 && (
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs uppercase tracking-widest text-ink-muted">Deposits</span>
+                          <span className="font-mono text-xs uppercase tracking-widest text-ink-muted">Deposits (STRATA-PH)</span>
                           {cycle.depositDigests.map((d) => <DigestLink key={d} digest={d} />)}
+                        </div>
+                      )}
+                      {(cycle.rlDepositDigests?.length ?? 0) > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-xs uppercase tracking-widest text-ink-muted">Deposits (STRATA-RL)</span>
+                          {cycle.rlDepositDigests.map((d) => <DigestLink key={d} digest={d} />)}
                         </div>
                       )}
                       {cycle.redeemedDigests.length > 0 && (

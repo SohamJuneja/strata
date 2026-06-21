@@ -26,4 +26,8 @@ export interface CommunityVaultEntry extends StrategyConfig {
   slug: string;
   vaultId: string;
   status: "pending" | "live";
+  /** Index into the on-chain VaultRegistry's vaults Table. Null if on-chain registration failed. */
+  vaultIndex: number | null;
+  /** Digest of the register_vault transaction. Null if on-chain registration failed. */
+  txDigest: string | null;
 }

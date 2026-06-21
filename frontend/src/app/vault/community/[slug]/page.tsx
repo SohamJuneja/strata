@@ -82,6 +82,17 @@ export default async function CommunityVaultPage({
               <span className="font-mono text-xs uppercase tracking-widest text-ink-muted">
                 Created by {shortAddr}
               </span>
+              {vault.txDigest && (
+                <a
+                  href={`https://suiscan.xyz/testnet/tx/${vault.txDigest}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-widest border border-positive text-positive px-3 py-1 hover:bg-positive/10 transition-colors"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-positive" />
+                  Verified on-chain
+                </a>
+              )}
             </div>
             <p className="mt-6 text-xl italic text-ink-secondary max-w-2xl">{vault.description}</p>
           </Container>
@@ -125,7 +136,13 @@ export default async function CommunityVaultPage({
                     {vault.creatorFeeBps / 100}% of deposits go to the vault creator.
                   </p>
                 </div>
-                <p className="mt-4 font-mono text-xs text-ink-muted break-all">Vault ID: {vault.vaultId}</p>
+                {vault.vaultIndex !== null ? (
+                  <p className="mt-4 font-mono text-xs text-ink-muted break-all">
+                    Registry Index: #{vault.vaultIndex}
+                  </p>
+                ) : (
+                  <p className="mt-4 font-mono text-xs text-ink-muted break-all">Vault ID: {vault.vaultId}</p>
+                )}
               </div>
 
               <div className="lg:col-span-7">
