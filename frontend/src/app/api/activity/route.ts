@@ -3,7 +3,12 @@ import * as path from "path";
 
 export const dynamic = "force-dynamic";
 
-const LOG_PATH = path.join(process.cwd(), "..", "marathon-bot", "cycle-log.json");
+// CYCLE_LOG_PATH (set in .env.local) points at the live marathon-bot
+// process's cycle-log.json for local dev. In production (Vercel), there's
+// no marathon-bot filesystem to read from, so this falls back to the
+// bundled public/cycle-log.json snapshot — a point-in-time copy, not live
+// data; re-copy and redeploy to refresh it.
+const LOG_PATH = process.env.CYCLE_LOG_PATH ?? path.join(process.cwd(), "public", "cycle-log.json");
 
 export async function GET() {
   if (!fs.existsSync(LOG_PATH)) {
