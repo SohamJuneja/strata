@@ -44,6 +44,22 @@ export default function HomePage() {
               <VaultCard name="STRATA-PH" tagline="PLP+Hedge strategy on dUSDC. Earn yield from binary options traders, hedged with crash insurance." href="/vault/strata-plp-hedge" />
               <VaultCard name="STRATA-RL" tagline="Range Ladder strategy on dUSDC. Auto-allocates across five strike bands, direction-neutral." href="/vault/strata-range-ladder" />
             </div>
+
+            <div className="mt-6 border border-dashed border-border p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+              <div>
+                <p className="font-mono text-xs uppercase tracking-widest text-ink-muted">Or build your own</p>
+                <p className="mt-2 text-sm text-ink-secondary max-w-md">
+                  Have a strategy? Configure it with AI and launch your own vault. Earn 0.10% of all deposits as
+                  the vault creator.
+                </p>
+              </div>
+              <a
+                href="/create-vault"
+                className="shrink-0 inline-flex items-center border border-ink-secondary text-ink px-6 py-3 font-mono text-sm uppercase tracking-widest hover:border-accent hover:text-accent transition-colors"
+              >
+                Create a Vault →
+              </a>
+            </div>
           </Container>
         </section>
 

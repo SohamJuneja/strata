@@ -11,7 +11,10 @@ export function Header() {
           <Link href="/vault/strata-plp-hedge" className="text-sm text-ink-secondary hover:text-ink transition-colors">PLP+Hedge</Link>
           <Link href="/vault/strata-range-ladder" className="text-sm text-ink-secondary hover:text-ink transition-colors">Range Ladder</Link>
           <Link href="/research/note-01" className="text-sm text-ink-secondary hover:text-ink transition-colors">Research</Link>
+          <Link href="/activity" className="text-sm text-ink-secondary hover:text-ink transition-colors">Activity</Link>
+          <Link href="/volatility" className="text-sm text-ink-secondary hover:text-ink transition-colors">Volatility</Link>
           <Link href="#thesis" className="text-sm text-ink-secondary hover:text-ink transition-colors">Thesis</Link>
+          <Link href="/create-vault" className="text-sm text-accent hover:text-accent-hover transition-colors">Create Vault</Link>
           <ConnectWalletButton />
         </nav>
       </Container>

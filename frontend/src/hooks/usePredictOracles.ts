@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-
-const PREDICT_SERVER = "https://predict-server.testnet.mystenlabs.com";
+import { PREDICT_SERVER_URL as PREDICT_SERVER } from "@/lib/constants";
 
 interface OracleEntry {
   oracle_id: string;
